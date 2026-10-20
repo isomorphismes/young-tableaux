@@ -9,7 +9,14 @@ permissions:
   contents: read
 
 jobs:
+  qualified-ick:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Qualify and retain the exact compiler before consumer execution
+        uses: isomorphisms/ai-ci/ick-host@903b2cb27ea572c9c6cb2ffa9f39e0fbf06ec9f8
+
   observable-jdt:
+    needs: qualified-ick
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
@@ -20,15 +27,24 @@ jobs:
           persist-credentials: false
       - name: Qualify current division-glyph host frontend
         id: ick
-        uses: isomorphisms/ai-ci/ick-host@4ea071a96239f3a29ca6d98454feb59947d87cfe
+        uses: isomorphisms/ai-ci/ick-host@903b2cb27ea572c9c6cb2ffa9f39e0fbf06ec9f8
+      - name: Check out accepted mandatory Ithon frontend
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: dilapidated-shed/ithon
+          ref: 74ab6d6044b07b76a910978437a34a6b5ac6acda
+          path: .ithon
+          persist-credentials: false
       - name: Execute real painter and reject silent mutants
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 tests/jeu_visual_contract.py \
-            --compiler "${{ steps.ick.outputs.compiler }}" \
-            --compiler-flag=-fno-link-libatomic
-          cat build/jdt-visual-evidence/receipt.tsv
+        env:
+          ITHON_PYTHON: python3
+          ITHON_CHECK_LOG: ${{ github.workspace }}/build/jdt-visual-evidence/source-checks.ndjson
+        run: >-
+          .ithon/ithon tests/jeu_visual_contract.pi
+          --compiler "${{ steps.ick.outputs.compiler }}"
+          --compiler-flag=-fno-link-libatomic
+      - name: Show the actual native receipt
+        run: cat build/jdt-visual-evidence/receipt.tsv
       - name: Preserve positive and negative evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -38,6 +54,7 @@ jobs:
           if-no-files-found: warn
 
   typed-jdt:
+    needs: qualified-ick
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -53,12 +70,18 @@ jobs:
           ref: 94dfd99bd3e376507fedc8611053b7173b2519f0
           path: idric-toolchain
           persist-credentials: false
+      - name: Qualify explicit ICK for the compiler's native support
+        id: ick
+        uses: isomorphisms/ai-ci/ick-host@903b2cb27ea572c9c6cb2ffa9f39e0fbf06ec9f8
       - name: Build owned Idriç compiler
+        env:
+          CC: ${{ steps.ick.outputs.compiler }}
+          CFLAGS: -fno-link-libatomic -static-libgcc
         shell: bash
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y build-essential curl python3 util-linux
+          sudo apt-get install -y curl python3 util-linux
           ( cd idric-toolchain/_ && ./edric all )
           test -x idric-toolchain/_/build/exec/idris2
       - name: Typecheck and execute signed-neighbor/provenance rules

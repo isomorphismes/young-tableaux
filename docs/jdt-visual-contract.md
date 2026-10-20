@@ -44,7 +44,7 @@ pixels, fixed-λ **reference** Wegert pixel equality, a changed **jeu-outer** We
 image after an actual corner removal, and a changed reference image after an
 explicit λ edit.
 
-`tests/jeu_visual_contract.py` runs the real test and separately compiles four
+`tests/jeu_visual_contract.pi` runs through mandatory checked Ithon, executes the real test and separately compiles four
 real C mutations: bypass the STEP, disable DIAGRAM rasterization, suppress
 Wegert invalidation on λ edit, and freeze the jeu-outer projection after its
 initialization. Every mutation must produce the diagnostic

@@ -1,0 +1,3 @@
+from pathlib import Path
+root ∈ object ← Path(".")
+core ∈ list[object] ← sorted(root.glob("*.c"))
