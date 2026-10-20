@@ -38,7 +38,7 @@ jobs:
       - name: Execute real painter and reject silent mutants
         env:
           ITHON_PYTHON: python3
-          ITHON_CHECK_LOG: ${{ github.workspace }}/build/jdt-visual-evidence/source-checks.ndjson
+          ITHON_CHECK_RECEIPT: ${{ runner.temp }}/jdt-source-checks.ndjson
         run: >-
           .ithon/ithon tests/jeu_visual_contract.pi
           --compiler "${{ steps.ick.outputs.compiler }}"
@@ -50,7 +50,9 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: jdt-visual-${{ github.event.pull_request.head.sha || github.sha }}
-          path: build/jdt-visual-evidence/
+          path: |
+            build/jdt-visual-evidence/
+            ${{ runner.temp }}/jdt-source-checks.ndjson
           if-no-files-found: warn
 
   typed-jdt:
