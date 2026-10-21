@@ -74,14 +74,15 @@ def main() → None:
     code = result.returncode
     expected ∈ str ← result.stdout
     cases ∈ int ← expected.count("CASE ")
-    if code != 0 or cases != 16 or "UNEXPECTED_NATIVE" in expected or observed != expected:
+    if code != 0 or cases != 18 or "UNEXPECTED_NATIVE" in expected or observed != expected:
         raise SystemExit("FAIL: executed Idriç/native traces differ")
     receipts ∈ list[str] ← ["case\tresult\n", "retained-13-rules\tPASS\n",
-        "checked-16-traces-and-8-admission-controls\tPASS\n"]
+        "checked-18-traces-and-9-admission-controls\tPASS\n"]
     mutations ∈ list[tuple[str,str,str,str]] ← [
         ("tie-right", "if right_value < below_value", "if right_value <= below_value", "CASE equal-chooses-below"),
         ("cell-overflow", "value > 0 && value <= 64", "value > 0", "ADMISSION_FAILURE oversized-row"),
-        ("ascending-partition", "next <= previous", "next <= 64", "ADMISSION_FAILURE ascending-shape")]
+        ("ascending-partition", "next <= previous", "next <= 64", "ADMISSION_FAILURE ascending-shape"),
+        ("entry-overflow", "entry.value > 0 && entry.value <= 2147483647", "entry.value > 0", "ADMISSION_FAILURE oversized-entry")]
     for mutation in mutations:
         name ∈ str ← mutation[0]
         old ∈ str ← mutation[1]
@@ -104,6 +105,6 @@ def main() → None:
     output.joinpath("receipt.tsv").write_text("".join(receipts))
     observation_digest ∈ str ← hashlib.sha256(expected.encode()).hexdigest()
     output.joinpath("observations.sha256").write_text(observation_digest + "\n")
-    print("IDRIC_TRANSITIONS PASS: 16 native trace comparisons, 8 admission controls, 3 compiled mutants, 13 retained rules")
+    print("IDRIC_TRANSITIONS PASS: 18 native trace comparisons, 9 admission controls, 4 compiled mutants, 13 retained rules")
 
 main()

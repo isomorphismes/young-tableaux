@@ -67,5 +67,7 @@ int main(void)
     run_case("weak-row-violation","3","1","2,1",1,1);
     run_case("not-inner-corner","3,2","2,1","2;3",1,1);
     run_case("coordinate-outside-board","2","1","3",64,64);
+    run_case("entry-upper-bound","2","1","2147483647",1,1);
+    run_case("unrepresentable-entry","2","1","2147483648",1,1);
     return 0;
 }
