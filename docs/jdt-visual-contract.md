@@ -44,6 +44,12 @@ pixels, fixed-λ **reference** Wegert pixel equality, a changed **jeu-outer** We
 image after an actual corner removal, and a changed reference image after an
 explicit λ edit.
 
+The positive executable also saves twelve actual 320×192 RGB PPM frames.
+The checked Ithon harness independently compares their bytes for the same
+mathematical invariance/change obligations and writes `pixels.sha256`. Mutant
+runs cannot overwrite the positive frames. These are host production-raster
+observations, not device screenshots or physical rendering acceptance.
+
 `tests/jeu_visual_contract.pi` runs through mandatory checked Ithon, executes the real test and separately compiles four
 real C mutations: bypass the STEP, disable DIAGRAM rasterization, suppress
 Wegert invalidation on λ edit, and freeze the jeu-outer projection after its

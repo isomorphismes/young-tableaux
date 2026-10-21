@@ -1,6 +1,7 @@
 """Check real JDT painter/transitions and four actual source mutants through Ithon."""
 import argparse
 import hashlib
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -42,7 +43,11 @@ def execute(compiler ∈ str, flags ∈ list[str], directory ∈ object,
     command.extend(source_paths)
     command.extend(["-lm", "-o", str(output)])
     subprocess.run(command, check=True, cwd=ROOT)
-    completed ∈ object ← subprocess.run([str(output)], cwd=ROOT, text=True, capture_output=True)
+    environment ∈ dict[str,str] ← os.environ.copy()
+    environment.pop("JDT_PIXEL_EVIDENCE_DIR", None)
+    if label == "actual":
+        environment["JDT_PIXEL_EVIDENCE_DIR"] = str(directory)
+    completed ∈ object ← subprocess.run([str(output)], cwd=ROOT, text=True, capture_output=True, env=environment)
     directory.joinpath(label + ".stdout").write_text(completed.stdout)
     directory.joinpath(label + ".stderr").write_text(completed.stderr)
     return completed
@@ -71,6 +76,30 @@ def main() → None:
     receipts ∈ list[str] ← ["case\tresult\texit_code\tsha256\n"]
     receipts.append("actual\tPASS\t" + str(code) + "\t" + digest(directory.joinpath("actual")) + "\n")
     print(stdout.strip(), flush=True)
+    frame_names ∈ list[str] ← ["board-initial","board-before-step","board-after-step",
+        "board-after-second-step","board-after-finish","board-rectified",
+        "fixed-lambda-before","fixed-lambda-after-step","fixed-lambda-after-finish",
+        "fixed-lambda-after-edit","jeu-outer-after-step","jeu-outer-after-finish"]
+    frames ∈ dict[str,bytes] ← {}
+    pixel_manifest ∈ list[str] ← []
+    for name in frame_names:
+        frame ∈ object ← directory.joinpath(name + ".ppm")
+        data ∈ bytes ← frame.read_bytes()
+        if not data.startswith(b"P6\n320 192\n255\n") or len(data) != 184335:
+            raise SystemExit("FAIL: incomplete actual pixel frame: " + name)
+        frames[name] = data
+        pixel_manifest.append(digest(frame) + "  " + name + ".ppm\n")
+    if frames["board-before-step"] == frames["board-after-step"]:
+        raise SystemExit("FAIL: saved board pixels did not move")
+    if frames["board-after-finish"] != frames["board-rectified"]:
+        raise SystemExit("FAIL: saved complete slide and rectification disagree")
+    if frames["fixed-lambda-before"] != frames["fixed-lambda-after-step"] or frames["fixed-lambda-before"] != frames["fixed-lambda-after-finish"]:
+        raise SystemExit("FAIL: saved fixed-lambda image changed")
+    if frames["fixed-lambda-before"] != frames["jeu-outer-after-step"]:
+        raise SystemExit("FAIL: saved jeu image changed before its outer shape")
+    if frames["fixed-lambda-before"] == frames["jeu-outer-after-finish"] or frames["fixed-lambda-before"] == frames["fixed-lambda-after-edit"]:
+        raise SystemExit("FAIL: saved changed-shape projection stayed stale")
+    directory.joinpath("pixels.sha256").write_text("".join(pixel_manifest))
     for mutation in MUTATIONS:
         name ∈ str ← mutation[0]
         source ∈ str ← mutation[1]
