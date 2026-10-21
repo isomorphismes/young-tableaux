@@ -1,0 +1,3 @@
+first ∈ list[str] ← ["compiler"]
+second ∈ list[str] ← ["flag"]
+combined ∈ list[str] ← first + second

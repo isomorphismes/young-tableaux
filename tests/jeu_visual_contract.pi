@@ -1,0 +1,125 @@
+"""Check real JDT painter/transitions and four actual source mutants through Ithon."""
+import argparse
+import hashlib
+import os
+import subprocess
+import sys
+from pathlib import Path
+from builtins import SystemExit, sorted
+
+ROOT ∈ object ← Path(__file__).resolve().parent.parent
+CORE ∈ list[object] ← sorted(ROOT.joinpath("app/core").glob("*.c"))
+NATIVE ∈ list[str] ← ["app/ui/controls.c", "app/console/nearby.c", "app/render/raster.c"]
+SOURCES ∈ list[str] ← ["app/console/console.c", "app/render/paint.c"]
+MUTATIONS ∈ list[tuple[str, str, str, str]] ← [
+    ("no-step", "app/console/console.c", "JeuStepResult result=jeu_step(&c->jeu);", "JeuStepResult result=JEU_INVALID;"),
+    ("no-diagram", "app/render/paint.c", "} else if(c->kind==DIAGRAM) {", "} else if(c->kind==DIAGRAM && 0) {"),
+    ("stale-wegert", "app/console/console.c", "c->diagram.addition_count=0; refresh_partition(c); refresh_tableau(c); refresh_jeu(c);", "c->diagram.addition_count=0; refresh_tableau(c); refresh_jeu(c);"),
+    ("stale-rectified-plot", "app/console/console.c", "project_wegert_shape(&c->jeu_wegert,&c->jeu.filling.shape.outer);", "if (!c->jeu_wegert.valid) project_wegert_shape(&c->jeu_wegert,&c->jeu.filling.shape.outer);")]
+
+def digest(path ∈ object) → str:
+    data ∈ bytes ← path.read_bytes()
+    result ∈ str ← hashlib.sha256(data).hexdigest()
+    return result
+
+def execute(compiler ∈ str, flags ∈ list[str], directory ∈ object,
+            label ∈ str, overrides ∈ dict[str, object]) → object:
+    output ∈ object ← directory.joinpath(label)
+    source_paths ∈ list[str] ← [str(ROOT.joinpath("tests/jeu_visual_contract.c"))]
+    for core in CORE:
+        source_paths.append(str(core))
+    for native in NATIVE:
+        source_paths.append(str(ROOT.joinpath(native)))
+    for source in SOURCES:
+        if source in overrides:
+            source_paths.append(str(overrides[source]))
+        else:
+            source_paths.append(str(ROOT.joinpath(source)))
+    command ∈ list[str] ← [compiler]
+    command.extend(flags)
+    command.extend(["-std=c17", "-O2", "-Wall", "-Wextra", "-Werror", "-Wpedantic", "-Wshadow"])
+    for include in ["app/core", "app/ui", "app/console", "app/render"]:
+        command.append("-I" + str(ROOT.joinpath(include)))
+    command.extend(source_paths)
+    command.extend(["-lm", "-o", str(output)])
+    subprocess.run(command, check=True, cwd=ROOT)
+    environment ∈ dict[str,str] ← os.environ.copy()
+    environment.pop("JDT_PIXEL_EVIDENCE_DIR", None)
+    if label == "actual":
+        environment["JDT_PIXEL_EVIDENCE_DIR"] = str(directory)
+    completed ∈ object ← subprocess.run([str(output)], cwd=ROOT, text=True, capture_output=True, env=environment)
+    directory.joinpath(label + ".stdout").write_text(completed.stdout)
+    directory.joinpath(label + ".stderr").write_text(completed.stderr)
+    return completed
+
+def main() → None:
+    parser ∈ object ← argparse.ArgumentParser()
+    parser.add_argument("--compiler", required=True)
+    default_flags ∈ list[str] ← []
+    parser.add_argument("--compiler-flag", action="append", default=default_flags)
+    parser.add_argument("--output", type=Path, default=ROOT.joinpath("build/jdt-visual-evidence"))
+    arguments ∈ object ← parser.parse_args()
+    directory ∈ object ← arguments.output.resolve()
+    directory.mkdir(parents=True, exist_ok=True)
+    compiler ∈ object ← Path(arguments.compiler).resolve()
+    exists ∈ bool ← compiler.is_file()
+    if not exists:
+        raise SystemExit("FAIL: the specified compiler does not exist")
+    flags ∈ list[str] ← arguments.compiler_flag
+    result ∈ object ← execute(str(compiler), flags, directory, "actual", {})
+    code ∈ int ← result.returncode
+    stdout ∈ str ← result.stdout
+    stderr ∈ str ← result.stderr
+    if code != 0 or not ("JDT_VISUAL PASS:" in stdout):
+        print(stderr or stdout, file=sys.stderr)
+        raise SystemExit("FAIL: real JDT state-to-pixel contract")
+    receipts ∈ list[str] ← ["case\tresult\texit_code\tsha256\n"]
+    receipts.append("actual\tPASS\t" + str(code) + "\t" + digest(directory.joinpath("actual")) + "\n")
+    print(stdout.strip(), flush=True)
+    frame_names ∈ list[str] ← ["board-initial","board-before-step","board-after-step",
+        "board-after-second-step","board-after-finish","board-rectified",
+        "fixed-lambda-before","fixed-lambda-after-step","fixed-lambda-after-finish",
+        "fixed-lambda-after-edit","jeu-outer-after-step","jeu-outer-after-finish"]
+    frames ∈ dict[str,bytes] ← {}
+    pixel_manifest ∈ list[str] ← []
+    for name in frame_names:
+        frame ∈ object ← directory.joinpath(name + ".ppm")
+        data ∈ bytes ← frame.read_bytes()
+        if not data.startswith(b"P6\n320 192\n255\n") or len(data) != 184335:
+            raise SystemExit("FAIL: incomplete actual pixel frame: " + name)
+        frames[name] = data
+        pixel_manifest.append(digest(frame) + "  " + name + ".ppm\n")
+    if frames["board-before-step"] == frames["board-after-step"]:
+        raise SystemExit("FAIL: saved board pixels did not move")
+    if frames["board-after-finish"] != frames["board-rectified"]:
+        raise SystemExit("FAIL: saved complete slide and rectification disagree")
+    if frames["fixed-lambda-before"] != frames["fixed-lambda-after-step"] or frames["fixed-lambda-before"] != frames["fixed-lambda-after-finish"]:
+        raise SystemExit("FAIL: saved fixed-lambda image changed")
+    if frames["fixed-lambda-before"] != frames["jeu-outer-after-step"]:
+        raise SystemExit("FAIL: saved jeu image changed before its outer shape")
+    if frames["fixed-lambda-before"] == frames["jeu-outer-after-finish"] or frames["fixed-lambda-before"] == frames["fixed-lambda-after-edit"]:
+        raise SystemExit("FAIL: saved changed-shape projection stayed stale")
+    directory.joinpath("pixels.sha256").write_text("".join(pixel_manifest))
+    for mutation in MUTATIONS:
+        name ∈ str ← mutation[0]
+        source ∈ str ← mutation[1]
+        original ∈ str ← mutation[2]
+        replacement ∈ str ← mutation[3]
+        source_text ∈ str ← ROOT.joinpath(source).read_text()
+        occurrences ∈ int ← source_text.count(original)
+        if occurrences != 1:
+            raise SystemExit("FAIL: " + name + " source mutation not unique")
+        mutant ∈ object ← directory.joinpath(name + ".c")
+        mutant.write_text(source_text.replace(original, replacement))
+        result = execute(str(compiler), flags, directory, name, {source: mutant})
+        code = result.returncode
+        stderr = result.stderr
+        if code == 0 or not ("JDT_VISUAL_FAIL" in stderr):
+            raise SystemExit("FAIL: " + name + " mutant escaped detection")
+        receipts.append(name + "\tREJECTED\t" + str(code) + "\t" + digest(directory.joinpath(name)) + "\n")
+        diagnostic ∈ str ← stderr.strip()
+        print("MUTANT_REJECTED " + name + ": " + diagnostic, flush=True)
+    directory.joinpath("receipt.tsv").write_text("".join(receipts))
+    print("JDT_VISUAL_ALL PASS: real painter, real transitions, four mutations")
+
+main()

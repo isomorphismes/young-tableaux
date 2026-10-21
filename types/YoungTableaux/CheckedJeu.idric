@@ -1,0 +1,266 @@
+module YoungTableaux.CheckedJeu
+
+import Data.List
+import Data.Maybe
+import Data.So
+
+-- The admitted domain matches the native bounded board: 64 rows/columns,
+-- 256 cells. Evidence is constructed by checking values, never by casting.
+previous_coordinate : Number → Number
+previous_coordinate Z = 0
+previous_coordinate (S previous) = previous
+
+coordinate_admitted : Number → Bool
+coordinate_admitted value = value > 0 && value <= 64
+
+export
+record BoundedCell where
+  constructor AdmittedCell
+  row : Number
+  column : Number
+  admitted : So (coordinate_admitted row && coordinate_admitted column)
+
+export
+checked_cell : Number → Number → Maybe BoundedCell
+checked_cell row column =
+  case choose (coordinate_admitted row && coordinate_admitted column) of
+    Left certificate => Just (AdmittedCell row column certificate)
+    Right _ => Nothing
+
+rows_below : Number → List Number → Bool
+rows_below previous [] = True
+rows_below previous (next :: rest) =
+  coordinate_admitted next && next <= previous && rows_below next rest
+
+partition_admitted : List Number → Bool
+partition_admitted rows =
+  length rows <= 64 && sum rows <= 256 && rows_below 64 rows
+
+export
+record CheckedPartition where
+  constructor AdmittedPartition
+  rows : List Number
+  admitted : So (partition_admitted rows)
+
+export
+checked_partition : List Number → Maybe CheckedPartition
+checked_partition rows = case choose (partition_admitted rows) of
+  Left certificate => Just (AdmittedPartition rows certificate)
+  Right _ => Nothing
+
+export
+record EntryAtCell where
+  constructor EntryAt
+  row : Number
+  column : Number
+  value : Number
+
+entry_value : Number → Number → List EntryAtCell → Maybe Number
+entry_value row column [] = Nothing
+entry_value row column (entry :: rest) =
+  if row ≟ entry.row && column ≟ entry.column
+     then Just entry.value else entry_value row column rest
+
+row_length : Number → List Number → Number
+row_length Z rows = 0
+row_length (S _) [] = 0
+row_length (S Z) (first :: rest) = first
+row_length (S (S index)) (first :: rest) = row_length (S index) rest
+
+inside : List Number → Number → Number → Bool
+inside rows row column = row > 0 && column > 0 && column <= row_length row rows
+
+contained : List Number → List Number → Bool
+contained [] outer = True
+contained (_ :: _) [] = False
+contained (inner :: inners) (outer :: outers) =
+  inner <= outer && contained inners outers
+
+cells_from : Number → List Number → List (Number, Number)
+cells_from row [] = []
+cells_from row (width :: rest) =
+  map (\column => (row, column)) [1..width] ++ cells_from (S row) rest
+
+same_cell : Number → Number → (Number, Number) → Bool
+same_cell row column (other_row, other_column) = row ≟ other_row && column ≟ other_column
+
+entry_admitted : List Number → List Number → Maybe (Number, Number) → EntryAtCell → Bool
+entry_admitted outer inner hole entry =
+  inside outer entry.row entry.column && not (inside inner entry.row entry.column)
+  && entry.value > 0 && (the Integer (cast entry.value)) <= 2147483647
+  && not (maybe False (same_cell entry.row entry.column) hole)
+
+ordered_entry : List EntryAtCell → EntryAtCell → Bool
+ordered_entry entries entry =
+  maybe True (<= entry.value) (entry_value entry.row (previous_coordinate entry.column) entries)
+  && maybe True (< entry.value) (entry_value (previous_coordinate entry.row) entry.column entries)
+
+hole_inside : List Number → List Number → Maybe (Number, Number) → Bool
+hole_inside outer inner Nothing = True
+hole_inside outer inner (Just (row, column)) =
+  inside outer row column && not (inside inner row column)
+
+filling_admitted : List Number → List Number → Maybe (Number, Number) → List EntryAtCell → Bool
+filling_admitted outer inner hole entries =
+  let required : List (Number, Number)
+      required = filter (\(row, column) => not (inside inner row column)
+                       && not (maybe False (same_cell row column) hole)) (cells_from 1 outer)
+      has_entry : (Number, Number) → Bool
+      has_entry = \(row, column) => isJust (entry_value row column entries)
+   in contained inner outer && hole_inside outer inner hole
+      && length entries ≟ length required
+      && all (entry_admitted outer inner hole) entries
+      && all has_entry required && all (ordered_entry entries) entries
+
+export
+record OrdinarySkew where
+  constructor AdmittedSkew
+  outer : CheckedPartition
+  inner : CheckedPartition
+  entries : List EntryAtCell
+  admitted : So (filling_admitted outer.rows inner.rows Nothing entries)
+
+export
+checked_skew : List Number → List Number → List EntryAtCell → Maybe OrdinarySkew
+checked_skew outer_rows inner_rows entries = do
+  outer ← checked_partition outer_rows
+  inner ← checked_partition inner_rows
+  case choose (filling_admitted outer.rows inner.rows Nothing entries) of
+    Left certificate => Just (AdmittedSkew outer inner entries certificate)
+    Right _ => Nothing
+
+export
+record SlidingSkew where
+  constructor AdmittedHole
+  outer : CheckedPartition
+  inner : CheckedPartition
+  hole : BoundedCell
+  entries : List EntryAtCell
+  admitted : So (filling_admitted outer.rows inner.rows (Just (hole.row, hole.column)) entries)
+
+checked_hole : List Number → List Number → BoundedCell → List EntryAtCell → Maybe SlidingSkew
+checked_hole outer_rows inner_rows hole entries = do
+  outer ← checked_partition outer_rows
+  inner ← checked_partition inner_rows
+  case choose (filling_admitted outer.rows inner.rows (Just (hole.row, hole.column)) entries) of
+    Left certificate => Just (AdmittedHole outer inner hole entries certificate)
+    Right _ => Nothing
+
+remove_from_rows : Number → List Number → List Number
+remove_from_rows Z rows = rows
+remove_from_rows (S _) [] = []
+remove_from_rows (S Z) (first :: rest) =
+  if first ≟ 1 then rest else previous_coordinate first :: rest
+remove_from_rows (S (S index)) (first :: rest) = first :: remove_from_rows (S index) rest
+
+removable : List Number → BoundedCell → Bool
+removable rows cell = cell.column ≟ row_length cell.row rows
+                  && cell.column > row_length (S cell.row) rows
+
+export
+begin_slide : OrdinarySkew → BoundedCell → Maybe SlidingSkew
+begin_slide board cell =
+  if removable board.inner.rows cell
+     then checked_hole board.outer.rows (remove_from_rows cell.row board.inner.rows) cell board.entries
+     else Nothing
+
+move_from : SlidingSkew → Number → Number → Number → Maybe SlidingSkew
+move_from board source_row source_column value = do
+  next_hole ← checked_cell source_row source_column
+  let remaining = filter (\entry => not (same_cell source_row source_column (entry.row, entry.column))) board.entries
+  checked_hole board.outer.rows board.inner.rows next_hole
+    (EntryAt board.hole.row board.hole.column value :: remaining)
+
+export
+forward_step : SlidingSkew → Maybe (Either OrdinarySkew SlidingSkew)
+forward_step board =
+  let row = board.hole.row
+      column = board.hole.column
+      right = entry_value row (S column) board.entries
+      below = entry_value (S row) column board.entries
+   in case (right, below) of
+     (Nothing, Nothing) =>
+       if removable board.outer.rows board.hole
+          then map Left (checked_skew (remove_from_rows row board.outer.rows) board.inner.rows board.entries)
+          else Nothing
+     (Just value, Nothing) => map Right (move_from board row (S column) value)
+     (Nothing, Just value) => map Right (move_from board (S row) column value)
+     (Just right_value, Just below_value) =>
+       if right_value < below_value
+          then map Right (move_from board row (S column) right_value)
+          else map Right (move_from board (S row) column below_value)
+
+rows_text : Number → List Number → List EntryAtCell → List Text
+rows_text row [] entries = []
+rows_text row (width :: rest) entries =
+  concat (intersperse "," (map (\column => show (fromMaybe 0 (entry_value row column entries))) [1..width]))
+  :: rows_text (S row) rest entries
+
+observation : CheckedPartition → CheckedPartition → Text → List EntryAtCell → Text
+observation outer inner hole entries =
+  "O=" ++ show outer.rows ++ "|I=" ++ show inner.rows ++ "|H=" ++ hole
+  ++ "|E=" ++ concat (intersperse ";" (rows_text 1 outer.rows entries))
+
+sliding_observation : SlidingSkew → Text
+sliding_observation board = observation board.outer board.inner
+  (show board.hole.row ++ "," ++ show board.hole.column) board.entries
+
+trace_steps : Number → SlidingSkew → Maybe (List Text)
+trace_steps Z board = Nothing
+trace_steps (S fuel) board = case forward_step board of
+  Nothing => Nothing
+  Just (Left finished) => Just [sliding_observation board,
+                               observation finished.outer finished.inner "-" finished.entries]
+  Just (Right next) => map (sliding_observation board ::) (trace_steps fuel next)
+
+export
+entry_at_cell : Number → Number → Number → EntryAtCell
+entry_at_cell = EntryAt
+
+export
+trace_slide : List Number → List Number → List EntryAtCell → Number → Number → Maybe (List Text)
+trace_slide outer inner entries row column = do
+  board ← checked_skew outer inner entries
+  cell ← checked_cell row column
+  active ← begin_slide board cell
+  trace_steps 257 active
+
+-- Full rectification retains a separate result type with an empty inner shape.
+finish_slide : Number → SlidingSkew → Maybe OrdinarySkew
+finish_slide Z board = Nothing
+finish_slide (S fuel) board = case forward_step board of
+  Nothing => Nothing
+  Just (Left finished) => Just finished
+  Just (Right next) => finish_slide fuel next
+
+rectify_steps : Number → OrdinarySkew → Maybe OrdinarySkew
+rectify_steps Z board = if null board.inner.rows then Just board else Nothing
+rectify_steps (S fuel) board = case last' board.inner.rows of
+  Nothing => Just board
+  Just column => do
+    -- The native rectifier chooses the last row's removable inner corner.
+    cell ← checked_cell (length board.inner.rows) column
+    active ← begin_slide board cell
+    finished ← finish_slide 257 active
+    rectify_steps fuel finished
+
+export
+record RectifiedFilling where
+  constructor AdmittedRectification
+  filling : OrdinarySkew
+  straight : So (null filling.inner.rows)
+
+export
+rectify : OrdinarySkew → Maybe RectifiedFilling
+rectify board = do
+  finished ← rectify_steps (sum board.inner.rows) board
+  case choose (null finished.inner.rows) of
+    Left certificate => Just (AdmittedRectification finished certificate)
+    Right _ => Nothing
+
+export
+rectification_observation : List Number → List Number → List EntryAtCell → Maybe Text
+rectification_observation outer inner entries = do
+  board ← checked_skew outer inner entries
+  result ← rectify board
+  Just (observation result.filling.outer result.filling.inner "-" result.filling.entries)

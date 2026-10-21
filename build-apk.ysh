@@ -1,5 +1,6 @@
 # Grease (pinned Oils-derived YSH implementation), build HOST only.
 # Invoke: grease build-apk.ysh /absolute/repository /absolute/sdk /absolute/ndk /absolute/keystore
+set -eu -o pipefail
 if (len(ARGV) !== 4) {
   echo 'usage: build-apk.ysh PROJECT SDK NDK STABLE_KEYSTORE (absolute paths)'
   exit 2
@@ -40,7 +41,7 @@ echo "$certificate" | rg -q 'SHA256: DE:9B:1D:47:C5:A6:5E:6D:46:A2:04:B7:9D:D9:E
 mkdir -p "$output/objects" "$output/staging/lib/armeabi-v7a"
 make -f "$project/icky/Android.mk" native ABI=armeabi-v7a NDK="$ndk" BUILD="$output/objects" OUT="$output/staging/lib/armeabi-v7a/libyoungtableaux.so"
 "$clang_bin/llvm-strip" --strip-unneeded "$output/staging/lib/armeabi-v7a/libyoungtableaux.so"
-"$tools/aapt2" link -I "$sdk/platforms/android-34/android.jar" -A "$project/app/assets" --manifest "$project/app/AndroidManifest.xml" --min-sdk-version 26 --target-sdk-version 34 --version-code 9 --version-name 0.4.0 -o "$output/unsigned.apk"
+"$tools/aapt2" link -I "$sdk/platforms/android-34/android.jar" -A "$project/app/assets" --manifest "$project/app/AndroidManifest.xml" --min-sdk-version 26 --target-sdk-version 34 --version-code 10 --version-name 0.4.1 -o "$output/unsigned.apk"
 cd "$output/staging"
 touch -t 198001010000 lib/armeabi-v7a/libyoungtableaux.so
 zip -X -0 -q "$output/unsigned.apk" lib/armeabi-v7a/libyoungtableaux.so
@@ -49,6 +50,10 @@ zip -X -0 -q "$output/unsigned.apk" lib/armeabi-v7a/libyoungtableaux.so
 "$tools/apksigner" verify --verbose --print-certs "$output/young-tableaux-armeabi-v7a.apk" | tee "$output/signing.txt"
 rg -q 'Signer #1 certificate SHA-256 digest: de9b1d47c5a65e6d46a204b79dd9ee566b9d3c9832ba81ebc4213d3392e92ff9' "$output/signing.txt"
 "$clang_bin/llvm-readelf" -h -A -l "$output/staging/lib/armeabi-v7a/libyoungtableaux.so" > "$output/abi.txt"
+rg -q 'Class:.*ELF32' "$output/abi.txt"
+rg -q 'Machine:.*ARM' "$output/abi.txt"
+"$clang_bin/llvm-readelf" --dyn-syms "$output/staging/lib/armeabi-v7a/libyoungtableaux.so" > "$output/symbols.txt"
+rg -q 'GLOBAL.*DEFAULT.*ANativeActivity_onCreate' "$output/symbols.txt"
 "$tools/aapt2" dump badging "$output/young-tableaux-armeabi-v7a.apk" > "$output/package.txt"
 sha256sum "$output/young-tableaux-armeabi-v7a.apk" | tee "$output/apk.sha256"
 git -C "$project" rev-parse HEAD > "$output/source.txt"

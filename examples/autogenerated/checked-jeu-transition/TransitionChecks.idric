@@ -1,0 +1,65 @@
+module TransitionChecks
+
+import YoungTableaux.CheckedJeu
+import Data.Maybe
+import System
+
+run_case : Text → List Number → List Number → List (Number, Number, Number) → Number → Number → IO ()
+run_case name outer inner entries row column = do
+  putStrLn ("CASE " ++ name)
+  let filling = map (\(r, c, value) => entry_at_cell r c value) entries
+  case trace_slide outer inner filling row column of
+    Nothing => putStrLn "REJECTED"
+    Just observations => traverse_ putStrLn observations
+
+require : Text → Bool → IO ()
+require name passed = if passed then pure () else do
+  putStrLn ("ADMISSION_FAILURE " ++ name)
+  exitFailure
+
+run_rectification : Text → List Number → List Number → List (Number, Number, Number) → IO ()
+run_rectification name outer inner entries = do
+  putStrLn ("RECTIFY " ++ name)
+  let filling = map (\(row, column, value) => entry_at_cell row column value) entries
+  case rectification_observation outer inner filling of
+    Nothing => putStrLn "REJECTED"
+    Just result => putStrLn result
+
+main : IO ()
+main = do
+  require "zero-cell" (isNothing (checked_cell 0 1))
+  require "oversized-row" (isNothing (checked_cell 4294967297 1))
+  require "oversized-column" (isNothing (checked_cell 1 4294967297))
+  require "boundary-cell" (isJust (checked_cell 64 64))
+  require "ascending-shape" (isNothing (checked_partition [1,2]))
+  require "excessive-width" (isNothing (checked_partition [65]))
+  require "excessive-size" (isNothing (checked_partition [64,64,64,64,1]))
+  require "boundary-size" (isJust (checked_partition [64,64,64,64]))
+  require "oversized-entry" (isNothing (checked_skew [2] [1] [entry_at_cell 1 2 2147483648]))
+  run_case "empty" [] [] [] 1 1
+  run_case "single" [1] [1] [] 1 1
+  run_case "right-only" [2] [1] [(1,2,3)] 1 1
+  run_case "below-only" [1,1] [1] [(2,1,3)] 1 1
+  run_case "equal-chooses-below" [2,1] [1] [(1,2,1),(2,1,1)] 1 1
+  run_case "right-smaller" [2,1] [1] [(1,2,1),(2,1,2)] 1 1
+  run_case "below-smaller" [2,1] [1] [(1,2,2),(2,1,1)] 1 1
+  run_case "display-witness" [3,2,1] [1] [(1,2,1),(1,3,3),(2,1,2),(2,2,5),(3,1,4)] 1 1
+  run_case "second-inner-corner" [3,2] [2,1] [(1,3,2),(2,2,3)] 2 1
+  run_case "malformed-outer" [1,2] [] [(1,1,1),(2,1,2),(2,2,3)] 1 1
+  run_case "inner-outside-outer" [1] [2] [] 1 1
+  run_case "zero-entry" [2] [1] [(1,2,0)] 1 1
+  run_case "strict-column-violation" [2,2] [1] [(1,2,1),(2,1,1),(2,2,1)] 1 1
+  run_case "weak-row-violation" [3] [1] [(1,2,2),(1,3,1)] 1 1
+  run_case "not-inner-corner" [3,2] [2,1] [(1,3,2),(2,2,3)] 1 1
+  run_case "coordinate-outside-board" [2] [1] [(1,2,3)] 64 64
+  run_case "entry-upper-bound" [2] [1] [(1,2,2147483647)] 1 1
+  run_case "unrepresentable-entry" [2] [1] [(1,2,2147483648)] 1 1
+  require "duplicate-entry" (isNothing (checked_skew [2] [] [entry_at_cell 1 1 1,entry_at_cell 1 1 2]))
+  require "missing-entry" (isNothing (checked_skew [2] [] [entry_at_cell 1 1 1]))
+  require "outside-entry" (isNothing (checked_skew [1] [] [entry_at_cell 1 2 1]))
+  run_rectification "empty" [] [] []
+  run_rectification "straight" [2,1] [] [(1,1,1),(1,2,2),(2,1,3)]
+  run_rectification "tie" [2,1] [1] [(1,2,1),(2,1,1)]
+  run_rectification "multiple-slides" [3,2] [2,1] [(1,3,2),(2,2,3)]
+  run_rectification "empty-skew" [3,2,1] [3,2,1] []
+  run_rectification "malformed" [1,2] [] [(1,1,1),(2,1,2),(2,2,3)]

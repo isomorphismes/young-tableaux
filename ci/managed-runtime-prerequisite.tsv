@@ -1,0 +1,14 @@
+key	value
+status	BLOCKED
+blocker	compatible_cpp_free_grease_not_independently_accepted
+policy	https://github.com/isomorphisms/flexible-pipes/issues/67
+shared_gate	https://github.com/isomorphisms/flexible-pipes/pull/52
+shared_candidate	68c53d0daa64ec998701060abaaf225752ea1e93
+runtime_owner	dilapidated-shed/grease
+acquisition_owner	isomorphisms/catfood
+acceptance_owner	isomorphisms/ai-ci
+historical_rebuilt_artifact	12239653583; C++ implementation; NOT_ELIGIBLE
+embedded_lua	87306483cec50f8c750a22dda1d0742246fad756; preserved
+managed_lua_admission	BLOCKED; historical compatibility runs are not current owner acceptance
+physical_A1	NOT_RUN
+physical_C67	NOT_RUN

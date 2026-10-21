@@ -1,0 +1,20 @@
+{
+  "schema_version":1,
+  "name":"young-tableaux-android",
+  "parameters":{
+    "grease":{"required":true,"pattern":"/[^\\n]+"},
+    "recipe":{"required":true,"pattern":"/[^\\n]+"},
+    "project":{"required":true,"pattern":"/[^\\n]+"},
+    "sdk":{"required":true,"pattern":"/[^\\n]+"},
+    "ndk":{"required":true,"pattern":"/[^\\n]+"},
+    "signer":{"required":true,"pattern":"/[^\\n]+"},
+    "catfood":{"required":true,"pattern":"/[^\\n]+"},
+    "aici":{"required":true,"pattern":"/[^\\n]+"},
+    "compiler":{"required":true,"pattern":"/[^\\n]+"}
+  },
+  "required_stages":["application-source","producer-and-independent-artifact-verdict"],
+  "stages":[
+    {"kind":"command","name":"application-source","argv":["git","-C","{{project}}","rev-parse","HEAD"],"cwd":"."},
+    {"kind":"command","name":"producer-and-independent-artifact-verdict","argv":["{{grease}}","{{recipe}}","{{project}}","{{sdk}}","{{ndk}}","{{signer}}","{{grease}}","{{catfood}}","{{aici}}","{{compiler}}"],"cwd":"."}
+  ]
+}

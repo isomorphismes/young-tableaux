@@ -38,6 +38,27 @@ static size_t changed_pixels(const uint32_t *before, const uint32_t *after)
     return changed;
 }
 
+/* Preserve the actual production raster, without introducing a second painter. */
+static int save_frame(const char *name, const uint32_t *pixels)
+{
+    const char *directory ← getenv("JDT_PIXEL_EVIDENCE_DIR");
+    if(!directory) return 1;
+    char path[1024];
+    int length ← snprintf(path,sizeof(path),"%s/%s.ppm",directory,name);
+    if(length<0 || (size_t)length>=sizeof(path)) return 0;
+    FILE *output ← fopen(path,"wb");
+    if(!output) return 0;
+    int ok ← fprintf(output,"P6\n%d %d\n255\n",W,H)>0;
+    for(size_t index ← 0; ok && index<PIXELS; ++index) {
+        unsigned char rgb[3] ← {(unsigned char)(pixels[index]>>16),
+                                (unsigned char)(pixels[index]>>8),
+                                (unsigned char)pixels[index]};
+        ok ← fwrite(rgb,1,sizeof(rgb),output)==sizeof(rgb);
+    }
+    if(fclose(output)!=0) ok ← 0;
+    return ok;
+}
+
 /* Check the exact projection objects given to production console_layout, not
    a parallel copy of the mathematical trace or a string-only status change. */
 static int ui_has_projection(Console *console, Controls *ui, ControlKind kind,
@@ -67,7 +88,9 @@ int main(void)
     CHECK(console->jeu_wegert.valid);
     CHECK(memcmp(&console->wegert, &console->jeu_wegert, sizeof(console->wegert)) == 0);
     CHECK(painted(console, DIAGRAM, &console->jeu_tiles, first));
+    CHECK(save_frame("board-initial",first));
     CHECK(painted(console, WEGERT, &console->wegert, second));
+    CHECK(save_frame("fixed-lambda-before",second));
     WegertProjection fixed_shape = console->wegert;
     CHECK(fixed_shape.valid && fixed_shape.n_lambda == 4);
     uint32_t *static_wegert = malloc(PIXELS * sizeof(*static_wegert));
@@ -88,7 +111,9 @@ int main(void)
     CHECK(ui_has_projection(console, ui, DIAGRAM, &console->jeu_before_tiles));
     CHECK(ui_has_projection(console, ui, DIAGRAM, &console->jeu_tiles));
     CHECK(painted(console, DIAGRAM, &console->jeu_before_tiles, first));
+    CHECK(save_frame("board-before-step",first));
     CHECK(painted(console, DIAGRAM, &console->jeu_tiles, third));
+    CHECK(save_frame("board-after-step",third));
     size_t first_step_delta = changed_pixels(first, third);
     CHECK(first_step_delta > 20);
 
@@ -96,8 +121,10 @@ int main(void)
     CHECK(memcmp(&fixed_shape, &console->wegert, sizeof(fixed_shape)) == 0);
     CHECK(painted(console, WEGERT, &console->wegert, second));
     CHECK(changed_pixels(static_wegert, second) == 0);
+    CHECK(save_frame("fixed-lambda-after-step",second));
     CHECK(painted(console, WEGERT, &console->jeu_wegert, second));
     CHECK(changed_pixels(static_wegert, second) == 0);
+    CHECK(save_frame("jeu-outer-after-step",second));
     CHECK(console->jeu_has_before);
 
     console_event(console, ui, (ControlEvent){EVENT_ACTIVATE, JDT_STEP});
@@ -106,6 +133,7 @@ int main(void)
     CHECK(console->jeu.filling.entries[0][2] == 0);
     CHECK(painted(console, DIAGRAM, &console->jeu_tiles, first));
     CHECK(changed_pixels(first, third) > 20);
+    CHECK(save_frame("board-after-second-step",first));
 
     console_event(console, ui, (ControlEvent){EVENT_ACTIVATE, JDT_STEP});
     CHECK(!console->jeu.active && console->jeu_ok);
@@ -119,14 +147,17 @@ int main(void)
     CHECK(console->jeu.filling.entries[2][0] == 4);
     CHECK(painted(console, DIAGRAM, &console->jeu_tiles, third));
     CHECK(changed_pixels(first, third) > 20);
+    CHECK(save_frame("board-after-finish",third));
     CHECK(painted(console, WEGERT, &console->wegert, second));
     CHECK(changed_pixels(static_wegert, second) == 0);
+    CHECK(save_frame("fixed-lambda-after-finish",second));
     CHECK(console->jeu_wegert.valid);
     CHECK(memcmp(&console->wegert, &console->jeu_wegert, sizeof(console->wegert)) != 0);
     CHECK(ui_has_projection(console, ui, WEGERT, &console->jeu_wegert));
     CHECK(painted(console, WEGERT, &console->jeu_wegert, second));
     size_t jeu_shape_delta = changed_pixels(static_wegert, second);
     CHECK(jeu_shape_delta > 20);
+    CHECK(save_frame("jeu-outer-after-finish",second));
 
     /* The independent whole-slide command and three STEP events agree. */
     TileProjection completed = console->jeu_tiles;
@@ -139,6 +170,7 @@ int main(void)
     CHECK(changed_pixels(static_wegert, second) == jeu_shape_delta);
     CHECK(painted(console, DIAGRAM, &console->jeu_tiles, first));
     CHECK(changed_pixels(first, third) == 0);
+    CHECK(save_frame("board-rectified",first));
 
     /* Changing λ changes its hook specialization AND the actual raster. */
     ui->focus = SET_LAMBDA;
@@ -152,6 +184,7 @@ int main(void)
     CHECK(painted(console, WEGERT, &console->wegert, second));
     size_t shape_delta = changed_pixels(static_wegert, second);
     CHECK(shape_delta > 20);
+    CHECK(save_frame("fixed-lambda-after-edit",second));
 
     /* A failure message must not substitute for moving mathematical pixels. */
     console_event(console, ui, (ControlEvent){EVENT_ACTIVATE, JDT_RESET});

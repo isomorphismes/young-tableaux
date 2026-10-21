@@ -1,0 +1,2 @@
+diagnostic ∈ str ← " observed "
+print("message: " + diagnostic.strip())

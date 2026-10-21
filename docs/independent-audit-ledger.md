@@ -66,3 +66,11 @@ Public output is section text unless a projection is explicitly named.
 | ComputeLongestDecreasingSubsequence | Permutation → one longest decreasing subsequence | Strict | combinatorics.c; permutation_parse | Shared permutation field; result list | C,O | Independent quadratic DP + support check | every permutation n≤7; RSK column identity | P | — |
 | CoxeterReducedWord | Permutation → one reduced adjacent-swap word | One-based positions; left-to-right on identity | combinatorics.c; permutation_parse | Shared permutation field; result list | C,O | Inversions/multiplication; complete reduced sets≤S5 | every permutation≤S7; complete-set membership≤S5 | P | — |
 | BruhatRelations | (permutation,permutation) → first≤second | Strong Bruhat, equal size | combinatorics.c; two permutation parses | Two permutation fields; YES/NO | C,O | Independent reduced-expression subword criterion | every pair S0–S5 | P | — |
+# Historical ledger
+
+This original failure ledger remains reproducibility evidence. C1–C10 were
+repaired in 4436601f57d22b27c6f524c4174abe55c247bf91. Use the exact-head
+`operation-ledger-<source revision>` CI artifact for current verdicts covering
+all 44 registered operations. `tests/emit_operation_ledger.pi` rejects incomplete
+coverage, failed renderer probes and any mathematical counterexample.
+

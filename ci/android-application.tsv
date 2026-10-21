@@ -1,0 +1,8 @@
+schema	catfood-android-application-v1
+repository	isomorphismes/young-tableaux
+package_id	org.functorialgames.youngtableaux
+launcher_label	Young Tableaux
+min_sdk	26
+packaging	split
+armeabi-v7a	supported
+arm64-v8a	supported

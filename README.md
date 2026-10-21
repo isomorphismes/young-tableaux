@@ -12,6 +12,7 @@ The native Android app is an interactive tableaux laboratory. The 0.4.0 operatio
 - [software/](software/) — computational references for checking examples and experiments
 - [topics/](topics/) — subject map and candidate mathematical inputs/operations
 - [types/YoungTableaux/Types.idr](types/YoungTableaux/Types.idr) — broad Idris type sketch for mathematical inputs, operations, controls, and events
+- [Executable mathematical boundaries](docs/checked-mathematical-boundaries.md) — checked Idriç RSK domains, completed pairs, inverse and jeu de taquin rectification, with native comparison and rejecting controls
 - [notes/first-apk-control-surface.md](notes/first-apk-control-surface.md) — first-APK exploration UI and native-window renderer plan
 - [cross-links.md](cross-links.md) — links to related repositories and subjects
 
