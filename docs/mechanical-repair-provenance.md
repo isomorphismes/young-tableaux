@@ -1,5 +1,15 @@
 # SUN YT-MECHANICAL-01: dependency repairs
 
+Current disposition: native and typed host qualification passed at
+dc0ad4c785d8f67b52cdad1c1b4c59bb569fb485, but managed runtime admission and
+release integration remain BLOCKED. Flexible Pipes issue #67 contains an
+explicit human prohibition on C++ Grease. Its current shared Lua PR #52 still
+requires an independently accepted compatible C++-free closure. The historical
+C++ artifact rebuilt below cannot satisfy that requirement. The restriction
+was found after the compatibility runs; those runs are retained as observations
+and are NOT_ELIGIBLE for managed Grease/Lua admission. The consumer now stops
+before acquiring that artifact. No shell substitution or policy waiver is made.
+
 The native C1–C10 repairs already landed in 4436601f57d22b27c6f524c4174abe55c247bf91.
 This work preserves those implementations and adds fresh qualification rather
 than repeating their merge. Historical audit failures remain historical evidence.
@@ -30,9 +40,18 @@ job 118445864340, source ba869518c7d850de6c47d8c6234654575e264e6c,
 Oils gitlink 5651cf97a1b5042f24f14112a7ade9a1518eb0bc. Inherited C++ specs,
 libc, fallocate, mmap and accelerometer checks passed.
 
-Replacement artifact 12239653583 has ZIP SHA-256
+Rebuilt historical artifact 12239653583 has ZIP SHA-256
 ef23118d46f8cc6fcce92dedad9d3480b1931db39748d8aaee18862115dd1894.
 Its compiled engine SHA-256 remains exactly
 7e31cd05b7a9d8fb2a4a9e003a7f3fcb0159138506d17f0fb28da8cbe22aa85c.
-The consumer keeps the unchanged owner launcher and engine digest. This is a
-rebuilt implementation from the owning source, not an interpreter substitution.
+The rebuild used the unchanged owner launcher and engine digest. It restores
+the implementation bytes, but the C++ implementation is disallowed by the
+managed-runtime policy. It is not an accepted consumer replacement.
+
+The paired APKs built at dc0ad4c are historical build candidates only. A1:
+4b153997e78e134f5530c08e040206d8a051c939048241a83f7442b8d38bd1ae;
+C67: 90ea9a6babba52130ea9464907a372b1fb365407d2428472d90d403875fdaa07.
+Both have package org.functorialgames.youngtableaux, versionCode 9, minSdk 26
+and the unchanged test signer. They are not Cat Food-delivered or physically
+accepted. The source candidate for versionCode 10 and Flexible Pipes paired
+production remains unexecuted on a permitted Grease closure.

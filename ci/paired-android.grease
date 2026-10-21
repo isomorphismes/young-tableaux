@@ -1,0 +1,31 @@
+# Build-host execution only. Flexible Pipes owns stage history; AICI owns the
+# independent finished-APK verdict. No command runs on a phone.
+set -eu -o pipefail
+if (len(ARGV) !== 8) {
+  echo 'usage: paired-android.grease PROJECT SDK NDK SIGNER GREASE CATFOOD AICI HOST_ICK'
+  exit 2
+}
+var project = $1
+var sdk = $2
+var ndk = $3
+var signer = $4
+var grease = $5
+var catfood = $6
+var aici = $7
+var compiler = $8
+for path in ([project,sdk,ndk,signer,grease,catfood,aici,compiler]) {
+  if (not path.startsWith('/')) { echo 'FAIL: absolute verified input paths required'; exit 2 }
+}
+var source = $(git -C "$project" rev-parse HEAD)
+var dirty = $(git -C "$project" status --porcelain --untracked-files=no)
+if (dirty !== '') { echo 'FAIL: tracked source changes cannot be qualified'; exit 2 }
+"$grease" "$project/build-apk.ysh" "$project" "$sdk" "$ndk" "$signer"
+"$grease" "$project/build-c67-apk.ysh" "$project" "$sdk" "$ndk" "$signer"
+var evidence = "$project/build/acceptance"
+test ! -e "$evidence"
+mkdir -p "$evidence"
+sh "$catfood/catfood" plan-android-build "$project/ci/android-application.tsv" phone "$source" > "$evidence/plan.tsv"
+printf 'target\tapk\nphone\t%s\nc67\t%s\n' "$project/build/young-tableaux-armeabi-v7a.apk" "$project/build/c67/young-tableaux-arm64-v8a.apk" > "$evidence/apk-map.tsv"
+env ANDROID_HOME="$sdk" ICK="$compiler" AICI_ANDROID_BUILD_TOOLS="$sdk/build-tools/35.0.0" AICI_COMPANION_RECEIPT="$evidence/artifact-verdict.tsv" bash "$aici/android-companion/verify.sh" "$catfood" "$project" "$project/ci/android-application.tsv" "$evidence/plan.tsv" "$evidence/apk-map.tsv"
+sha256sum "$evidence/plan.tsv" "$evidence/apk-map.tsv" > "$evidence/input.sha256"
+printf 'source\t%s\nphysical_A1\tNOT_RUN\nphysical_C67\tNOT_RUN\n' "$source" > "$evidence/scope.tsv"
