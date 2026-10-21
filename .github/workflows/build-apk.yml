@@ -29,7 +29,7 @@ jobs:
       - name: Install the declared Android NDK
         run: sdkmanager "ndk;27.2.12479018"
       - name: Build and qualify the ICK frontend
-        uses: isomorphisms/ai-ci/ick-android@4ea071a96239f3a29ca6d98454feb59947d87cfe
+        uses: isomorphisms/ai-ci/ick-android@837d0a214c82c7be01cd25d5c114ee8057025f5c
         with:
           abi: ${{ matrix.abi }}
           ndk: ${{ env.ANDROID_HOME }}/ndk/27.2.12479018
@@ -83,7 +83,7 @@ jobs:
         with:
           repository: dilapidated-shed/grease
           run-id: 37478624499
-          artifact-ids: 11419719229
+          artifact-ids: 12239653583
           merge-multiple: true
           github-token: ${{ github.token }}
           path: grease-runtime
@@ -174,7 +174,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: isomorphisms/ai-ci
-          ref: 4ea071a96239f3a29ca6d98454feb59947d87cfe
+          ref: 837d0a214c82c7be01cd25d5c114ee8057025f5c
           path: .ai-ci-ick
       - name: Download qualified compiler stages
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093

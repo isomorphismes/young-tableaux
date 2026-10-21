@@ -14,6 +14,14 @@ jobs:
     steps:
       - name: Qualify and retain the exact compiler before consumer execution
         uses: isomorphisms/ai-ci/ick-host@903b2cb27ea572c9c6cb2ffa9f39e0fbf06ec9f8
+      - name: Archive the qualified compiler for reproducible host comparisons
+        run: tar -C "${{ runner.temp }}" -czf "${{ runner.temp }}/ick-host-stage.tar.gz" ick-host-stage
+      - name: Preserve the qualified compiler and runtime closure
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: young-qualified-host-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/ick-host-stage.tar.gz
+          if-no-files-found: error
 
   observable-jdt:
     needs: qualified-ick
