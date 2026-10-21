@@ -224,3 +224,43 @@ trace_slide outer inner entries row column = do
   cell ← checked_cell row column
   active ← begin_slide board cell
   trace_steps 257 active
+
+-- Full rectification retains a separate result type with an empty inner shape.
+finish_slide : Number → SlidingSkew → Maybe OrdinarySkew
+finish_slide Z board = Nothing
+finish_slide (S fuel) board = case forward_step board of
+  Nothing => Nothing
+  Just (Left finished) => Just finished
+  Just (Right next) => finish_slide fuel next
+
+rectify_steps : Number → OrdinarySkew → Maybe OrdinarySkew
+rectify_steps Z board = if null board.inner.rows then Just board else Nothing
+rectify_steps (S fuel) board = case last' board.inner.rows of
+  Nothing => Just board
+  Just column => do
+    -- The native rectifier chooses the last row's removable inner corner.
+    cell ← checked_cell (length board.inner.rows) column
+    active ← begin_slide board cell
+    finished ← finish_slide 257 active
+    rectify_steps fuel finished
+
+export
+record RectifiedFilling where
+  constructor AdmittedRectification
+  filling : OrdinarySkew
+  straight : So (null filling.inner.rows)
+
+export
+rectify : OrdinarySkew → Maybe RectifiedFilling
+rectify board = do
+  finished ← rectify_steps (sum board.inner.rows) board
+  case choose (null finished.inner.rows) of
+    Left certificate => Just (AdmittedRectification finished certificate)
+    Right _ => Nothing
+
+export
+rectification_observation : List Number → List Number → List EntryAtCell → Maybe Text
+rectification_observation outer inner entries = do
+  board ← checked_skew outer inner entries
+  result ← rectify board
+  Just (observation result.filling.outer result.filling.inner "-" result.filling.entries)

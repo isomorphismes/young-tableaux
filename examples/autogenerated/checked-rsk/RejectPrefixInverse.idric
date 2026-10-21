@@ -1,0 +1,6 @@
+module RejectPrefixInverse
+
+import YoungTableaux.CheckedRSK
+
+unfinished_pair : RSKPrefix → Maybe CheckedPermutation
+unfinished_pair prefix = inverse_permutation prefix

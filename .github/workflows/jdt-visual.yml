@@ -130,3 +130,21 @@ jobs:
             build/typed-jeu-evidence/
             ${{ runner.temp }}/typed-source-checks.ndjson
           if-no-files-found: error
+      - name: Execute checked RSK domains, prefixes, completed pairs and inverse
+        env:
+          ITHON_PYTHON: python3
+          ITHON_CHECK_RECEIPT: ${{ runner.temp }}/typed-rsk-source-checks.ndjson
+        run: >-
+          .ithon/ithon tests/typed_rsk_contract.pi
+          --compiler "${{ steps.ick.outputs.compiler }}"
+          --idric "$GITHUB_WORKSPACE/idric-runtime/idric-linux-x86_64-94dfd99bd3e376507fedc8611053b7173b2519f0/bin/idric"
+          --idric-env "$GITHUB_WORKSPACE/idric-runtime/idric-linux-x86_64-94dfd99bd3e376507fedc8611053b7173b2519f0/bin/idric-env"
+      - name: Preserve checked RSK execution and rejection evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: typed-rsk-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            build/typed-rsk-evidence/
+            ${{ runner.temp }}/typed-rsk-source-checks.ndjson
+          if-no-files-found: error

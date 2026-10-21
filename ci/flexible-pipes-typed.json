@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "name": "young-tableaux-typed-boundaries",
+  "parameters": {
+    "project": {"required": true, "pattern": "/[^\\n]+"},
+    "compiler": {"required": true, "pattern": "/[^\\n]+"},
+    "ithon": {"required": true, "pattern": "/[^\\n]+"},
+    "idric": {"required": true, "pattern": "/[^\\n]+"},
+    "idric_env": {"required": true, "pattern": "/[^\\n]+"}
+  },
+  "required_stages": ["assignment", "source", "typed-rsk", "typed-rectification"],
+  "stages": [
+    {"kind": "command", "name": "assignment", "argv": ["env", "-C", "{{project}}", "sha256sum", "ci/typed-boundary-assignment.txt"], "cwd": "."},
+    {"kind": "command", "name": "source", "argv": ["git", "-C", "{{project}}", "rev-parse", "HEAD"], "cwd": "."},
+    {"kind": "command", "name": "typed-rsk", "argv": ["env", "-C", "{{project}}", "{{ithon}}", "tests/typed_rsk_contract.pi", "--compiler", "{{compiler}}", "--idric", "{{idric}}", "--idric-env", "{{idric_env}}"], "cwd": "."},
+    {"kind": "command", "name": "typed-rectification", "argv": ["env", "-C", "{{project}}", "{{ithon}}", "tests/typed_jeu_contract.pi", "--compiler", "{{compiler}}", "--idric", "{{idric}}", "--idric-env", "{{idric_env}}"], "cwd": "."}
+  ]
+}

@@ -1,0 +1,125 @@
+module RSKChecks
+
+import YoungTableaux.CheckedRSK
+import Data.List
+import Data.Maybe
+import System
+
+require : Text → Bool → IO ()
+require name passed = if passed then pure () else do
+  putStrLn ("ADMISSION_FAILURE " ++ name)
+  exitFailure
+
+observe : Maybe RSKPrefix → IO ()
+observe Nothing = do
+  putStrLn "UNEXPECTED_REJECTION"
+  exitFailure
+observe (Just prefix) = putStrLn (prefix_observation prefix)
+
+word_case : List Integer → IO ()
+word_case letters = do
+  putStrLn ("WORD " ++ show letters)
+  case checked_word letters of
+    Nothing => exitFailure
+    Just word => do
+      traverse_ (\step => observe (word_prefix word step)) [0..length letters]
+      require "complete-word" (isJust (word_prefix word (length letters) >>= complete_word))
+      if null letters then pure () else
+        require "partial-word" (isNothing (word_prefix word 0 >>= complete_word))
+
+permutation_case : List Integer → IO ()
+permutation_case letters = do
+  putStrLn ("PERMUTATION " ++ show letters)
+  case checked_permutation letters of
+    Nothing => exitFailure
+    Just permutation => do
+      traverse_ (\step => observe (permutation_prefix permutation step)) [0..length letters]
+      recovered ← pure (permutation_prefix permutation (length letters) >>= complete_permutation >>= inverse_permutation)
+      require "inverse-roundtrip" (map permutation_letters recovered ≟ Just letters)
+      if null letters then pure () else
+        require "partial-permutation" (isNothing (permutation_prefix permutation 0 >>= complete_permutation))
+
+biword_case : List (Integer, Integer) → IO ()
+biword_case letters = do
+  putStrLn ("BIWORD " ++ show letters)
+  case checked_biword letters of
+    Nothing => exitFailure
+    Just biword => do
+      traverse_ (\step => observe (biword_prefix biword step)) [0..length letters]
+      require "complete-biword" (isJust (biword_prefix biword (length letters) >>= complete_biword))
+      if null letters then pure () else
+        require "partial-biword" (isNothing (biword_prefix biword 0 >>= complete_biword))
+
+matrix_case : List (List Integer) → IO ()
+matrix_case weights = do
+  putStrLn ("MATRIX " ++ show weights)
+  case checked_matrix weights of
+    Nothing => exitFailure
+    Just matrix => do
+      let count : Number = cast (sum (concat weights))
+      traverse_ (\step => observe (matrix_prefix matrix step)) [0..count]
+      require "complete-matrix" (isJust (matrix_prefix matrix count >>= complete_biword))
+
+words_of_length : Number → List (List Integer)
+words_of_length Z = [[]]
+words_of_length (S count) = concatMap (\prefix => map (\letter => prefix ++ [letter]) [1,2,3]) (words_of_length count)
+
+permutations_from : Number → List Integer → List (List Integer)
+permutations_from Z letters = [[]]
+permutations_from (S count) letters = concatMap (\first =>
+  map (first ::) (permutations_from count (filter (\letter => not (letter ≟ first)) letters))) letters
+
+main : IO ()
+main = do
+  require "negative-word" (isNothing (checked_word [-1]))
+  require "zero-word" (isNothing (checked_word [0]))
+  require "entry-overflow" (isNothing (checked_word [2147483648]))
+  require "word-limit" (isNothing (checked_word (replicate 65 1)))
+  require "repeated-permutation" (isNothing (checked_permutation [1,1]))
+  require "out-of-range-permutation" (isNothing (checked_permutation [1,3]))
+  require "biword-order" (isNothing (checked_biword [(1,2),(1,1)]))
+  require "biword-top-order" (isNothing (checked_biword [(2,1),(1,2)]))
+  require "biword-zero" (isNothing (checked_biword [(0,1)]))
+  require "biword-overflow" (isNothing (checked_biword [(2147483648,1)]))
+  require "biword-limit" (isNothing (checked_biword (replicate 65 (1,1))))
+  require "matrix-negative" (isNothing (checked_matrix [[-1]]))
+  require "matrix-overflow" (isNothing (checked_matrix [[2147483648]]))
+  require "matrix-expanded-limit" (isNothing (checked_matrix [[65]]))
+  require "matrix-ragged" (isNothing (checked_matrix [[1,0],[1]]))
+  require "matrix-empty-row" (isNothing (checked_matrix [[]]))
+  require "matrix-row-limit" (isNothing (checked_matrix (replicate 65 [0])))
+  require "matrix-column-limit" (isNothing (checked_matrix [replicate 65 0]))
+  require "negative-filling" (isNothing (checked_semistandard [[-1]]))
+  require "zero-filling" (isNothing (checked_semistandard [[0]]))
+  require "filling-overflow" (isNothing (checked_semistandard [[2147483648]]))
+  require "ascending-shape" (isNothing (checked_semistandard [[1],[2,3]]))
+  require "empty-row" (isNothing (checked_semistandard [[]]))
+  require "weak-row" (isNothing (checked_semistandard [[2,1]]))
+  require "strict-column" (isNothing (checked_semistandard [[1],[1]]))
+  require "board-width" (isNothing (checked_semistandard [replicate 65 1]))
+  require "board-size" (isNothing (checked_semistandard (map (\value => replicate 64 value) [1,2,3,4,5])))
+  require "board-boundary" (isJust (checked_semistandard (map (\value => replicate 64 value) [1,2,3,4])))
+  require "standard-repeats" (isNothing (checked_standard [[1,1]]))
+  require "standard-alphabet" (isNothing (checked_standard [[2]]))
+  require "pair-shape" (isNothing (checked_permutation_pair [[1,2]] [[1],[2]]))
+  require "pair-standard" (isNothing (checked_permutation_pair [[1,1]] [[1,2]]))
+  case checked_semistandard [[1]] of
+    Nothing => exitFailure
+    Just filling => do
+      require "insert-zero" (isNothing (insert_letter filling 0))
+      require "insert-overflow" (isNothing (insert_letter filling 2147483648))
+  case checked_semistandard [replicate 64 1] of
+    Nothing => exitFailure
+    Just filling => require "insert-width-limit" (isNothing (insert_letter filling 1))
+  traverse_ (\count => traverse_ word_case (words_of_length count)) [0..4]
+  word_case [2147483647,1,2147483647]
+  word_case (replicate 64 1)
+  permutation_case []
+  traverse_ (\count => traverse_ permutation_case (permutations_from count (map cast [1..count]))) [1..5]
+  permutation_case (reverse (map cast [1..64]))
+  traverse_ biword_case [[],[(1,1)],[(1,1),(1,1),(1,2),(2,1),(2,2)],
+    [(1,3),(2,1),(2,2),(3,1)],[(2147483647,2147483647)]]
+  matrix_case []
+  traverse_ (\first => traverse_ (\second => traverse_ (\third => traverse_
+    (\fourth => matrix_case [[first,second],[third,fourth]]) [0,1,2]) [0,1,2]) [0,1,2]) [0,1,2]
+  matrix_case [[64]]

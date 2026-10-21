@@ -8,7 +8,7 @@
     "idric_env":{"required":true,"pattern":"/[^\\n]+"},
     "grease":{"required":true,"pattern":"/[^\\n]+"}
   },
-  "required_stages":["source","native-sanitizers","painter","repair-mutants","mathematical-mutants","all-operations","renderer","operation-ledger","typed-transitions"],
+  "required_stages":["source","native-sanitizers","painter","repair-mutants","mathematical-mutants","all-operations","renderer","operation-ledger","typed-transitions","typed-rsk"],
   "stages":[
     {"kind":"command","name":"source","argv":["git","-C","{{project}}","rev-parse","HEAD"],"cwd":"."},
     {"kind":"command","name":"native-sanitizers","argv":["env","-C","{{project}}","{{grease}}","test-host.ysh","{{project}}","{{compiler}}"],"cwd":"."},
@@ -18,6 +18,7 @@
     {"kind":"command","name":"all-operations","argv":["env","-C","{{project}}","python3","tests/independent_audit.py","--compiler","{{compiler}}"],"cwd":"."},
     {"kind":"command","name":"renderer","argv":["env","-C","{{project}}","python3","tests/audit_renderer.py","--compiler","{{compiler}}"],"cwd":"."},
     {"kind":"command","name":"operation-ledger","argv":["env","-C","{{project}}","{{ithon}}","tests/emit_operation_ledger.pi"],"cwd":"."},
-    {"kind":"command","name":"typed-transitions","argv":["env","-C","{{project}}","{{ithon}}","tests/typed_jeu_contract.pi","--compiler","{{compiler}}","--idric","{{idric}}","--idric-env","{{idric_env}}"],"cwd":"."}
+    {"kind":"command","name":"typed-transitions","argv":["env","-C","{{project}}","{{ithon}}","tests/typed_jeu_contract.pi","--compiler","{{compiler}}","--idric","{{idric}}","--idric-env","{{idric_env}}"],"cwd":"."},
+    {"kind":"command","name":"typed-rsk","argv":["env","-C","{{project}}","{{ithon}}","tests/typed_rsk_contract.pi","--compiler","{{compiler}}","--idric","{{idric}}","--idric-env","{{idric_env}}"],"cwd":"."}
   ]
 }

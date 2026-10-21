@@ -1,0 +1,385 @@
+module YoungTableaux.CheckedRSK
+
+import Data.List
+import Data.Maybe
+import Data.So
+
+-- Limits belong to the existing native boundary, not to abstract tableaux.
+entry_admitted : Integer → Bool
+entry_admitted value = value > 0 && value <= 2147483647
+
+partition_rows : Number → List Number → Bool
+partition_rows previous [] = True
+partition_rows previous (width :: rest) =
+  width > 0 && width <= previous && partition_rows width rest
+
+shape_admitted : List (List Integer) → Bool
+shape_admitted rows = length rows <= 64 && sum (map length rows) <= 256
+                  && partition_rows 64 (map length rows)
+
+row_ordered : List Integer → Bool
+row_ordered [] = True
+row_ordered [value] = True
+row_ordered (first :: second :: rest) = first <= second && row_ordered (second :: rest)
+
+columns_ordered : List Integer → List Integer → Bool
+columns_ordered upper [] = True
+columns_ordered [] (_ :: _) = False
+columns_ordered (above :: uppers) (below :: lowers) =
+  above < below && columns_ordered uppers lowers
+
+adjacent_rows_ordered : List (List Integer) → Bool
+adjacent_rows_ordered [] = True
+adjacent_rows_ordered [row] = True
+adjacent_rows_ordered (upper :: lower :: rest) =
+  columns_ordered upper lower && adjacent_rows_ordered (lower :: rest)
+
+semistandard_admitted : List (List Integer) → Bool
+semistandard_admitted rows = shape_admitted rows && all (all entry_admitted) rows
+                         && all row_ordered rows && adjacent_rows_ordered rows
+
+one_through : Number → List Number
+one_through Z = []
+one_through (S count) = one_through count ++ [S count]
+
+standard_alphabet : List (List Integer) → Bool
+standard_alphabet rows = sort (concat rows) ≟ map cast (one_through (sum (map length rows)))
+
+export
+record SemistandardFilling where
+  constructor AdmittedSemistandard
+  rows : List (List Integer)
+  admitted : So (semistandard_admitted rows)
+
+export
+checked_semistandard : List (List Integer) → Maybe SemistandardFilling
+checked_semistandard rows = case choose (semistandard_admitted rows) of
+  Left certificate => Just (AdmittedSemistandard rows certificate)
+  Right _ => Nothing
+
+export
+record StandardFilling where
+  constructor AdmittedStandard
+  filling : SemistandardFilling
+  admitted : So (standard_alphabet filling.rows)
+
+export
+checked_standard : List (List Integer) → Maybe StandardFilling
+checked_standard rows = do
+  filling ← checked_semistandard rows
+  case choose (standard_alphabet filling.rows) of
+    Left certificate => Just (AdmittedStandard filling certificate)
+    Right _ => Nothing
+
+word_admitted : List Integer → Bool
+word_admitted letters = length letters <= 64 && all entry_admitted letters
+
+export
+record CheckedWord where
+  constructor AdmittedWord
+  letters : List Integer
+  admitted : So (word_admitted letters)
+
+export
+checked_word : List Integer → Maybe CheckedWord
+checked_word letters = case choose (word_admitted letters) of
+  Left certificate => Just (AdmittedWord letters certificate)
+  Right _ => Nothing
+
+permutation_admitted : List Integer → Bool
+permutation_admitted letters = word_admitted letters
+  && sort letters ≟ map cast (one_through (length letters))
+
+export
+record CheckedPermutation where
+  constructor AdmittedPermutation
+  letters : List Integer
+  admitted : So (permutation_admitted letters)
+
+export
+checked_permutation : List Integer → Maybe CheckedPermutation
+checked_permutation letters = case choose (permutation_admitted letters) of
+  Left certificate => Just (AdmittedPermutation letters certificate)
+  Right _ => Nothing
+
+letters_ordered : List (Integer, Integer) → Bool
+letters_ordered [] = True
+letters_ordered [letter] = True
+letters_ordered ((top, bottom) :: (next_top, next_bottom) :: rest) =
+  (top < next_top || (top ≟ next_top && bottom <= next_bottom))
+  && letters_ordered ((next_top, next_bottom) :: rest)
+
+biword_admitted : List (Integer, Integer) → Bool
+biword_admitted letters = length letters <= 64
+  && all (\(top, bottom) => entry_admitted top && entry_admitted bottom) letters
+  && letters_ordered letters
+
+export
+record CheckedBiword where
+  constructor AdmittedBiword
+  letters : List (Integer, Integer)
+  admitted : So (biword_admitted letters)
+
+export
+checked_biword : List (Integer, Integer) → Maybe CheckedBiword
+checked_biword letters = case choose (biword_admitted letters) of
+  Left certificate => Just (AdmittedBiword letters certificate)
+  Right _ => Nothing
+
+matrix_admitted : List (List Integer) → Bool
+matrix_admitted [] = True
+matrix_admitted (first :: rest) =
+  length (first :: rest) <= 64 && length first > 0 && length first <= 64
+  && all (\row => length row ≟ length first) rest
+  && all (all (>= 0)) (first :: rest) && sum (concat (first :: rest)) <= 64
+
+export
+record CheckedMatrix where
+  constructor AdmittedMatrix
+  weights : List (List Integer)
+  admitted : So (matrix_admitted weights)
+
+export
+checked_matrix : List (List Integer) → Maybe CheckedMatrix
+checked_matrix weights = case choose (matrix_admitted weights) of
+  Left certificate => Just (AdmittedMatrix weights certificate)
+  Right _ => Nothing
+
+numbered : Number → List value_type → List (Number, value_type)
+numbered index [] = []
+numbered index (value :: rest) = (index, value) :: numbered (S index) rest
+
+matrix_letters : Number → List (List Integer) → List (Integer, Integer)
+matrix_letters row [] = []
+matrix_letters row (weights :: rest) =
+  concatMap (\(column, count) => replicate (cast count) (cast row, cast column))
+    (numbered 1 weights) ++ matrix_letters (S row) rest
+
+export
+matrix_biword : CheckedMatrix → Maybe CheckedBiword
+matrix_biword matrix = checked_biword (matrix_letters 1 matrix.weights)
+
+-- Reconcile Young.Core's existing row bumping algorithm, retaining its path.
+insert_row : Integer → List Integer → (List Integer, Maybe Integer, Number)
+insert_row value [] = ([value], Nothing, 1)
+insert_row value (first :: rest) =
+  if first > value then (value :: rest, Just first, 1)
+  else let (changed, bumped, column) = insert_row value rest in
+       (first :: changed, bumped, S column)
+
+insert_rows : Number → Integer → List (List Integer) →
+              (List (List Integer), (Number, Number), List (Number, Number))
+insert_rows row value [] = ([[value]], (row, 1), [(row, 1)])
+insert_rows row value (first :: rest) =
+  let (changed, bumped, column) = insert_row value first
+      cell = (row, column) in
+  case bumped of
+    Nothing => (changed :: rest, cell, [cell])
+    Just next => let (lower, corner, path) = insert_rows (S row) next rest in
+                 (changed :: lower, corner, cell :: path)
+
+export
+record RowInsertion where
+  constructor InsertedLetter
+  filling : SemistandardFilling
+  new_cell : (Number, Number)
+  path : List (Number, Number)
+
+export
+insert_letter : SemistandardFilling → Integer → Maybe RowInsertion
+insert_letter filling value =
+  if not (entry_admitted value) then Nothing else do
+    let (rows, corner, path) = insert_rows 1 value filling.rows
+    checked ← checked_semistandard rows
+    Just (InsertedLetter checked corner path)
+
+append_at : Number → Integer → List (List Integer) → List (List Integer)
+append_at Z value rows = rows
+append_at (S Z) value [] = [[value]]
+append_at (S (S index)) value [] = []
+append_at (S Z) value (row :: rest) = (row ++ [value]) :: rest
+append_at (S (S index)) value (row :: rest) = row :: append_at (S index) value rest
+
+pair_admitted : SemistandardFilling → SemistandardFilling → Bool
+pair_admitted insertion recording = map length insertion.rows ≟ map length recording.rows
+
+export
+record TableauPair where
+  constructor AdmittedPair
+  insertion : SemistandardFilling
+  recording : SemistandardFilling
+  same_shape : So (pair_admitted insertion recording)
+
+checked_pair : SemistandardFilling → SemistandardFilling → Maybe TableauPair
+checked_pair insertion recording = case choose (pair_admitted insertion recording) of
+  Left certificate => Just (AdmittedPair insertion recording certificate)
+  Right _ => Nothing
+
+trace_admitted : Number → Number → TableauPair → Bool
+trace_admitted input_count processed pair = processed <= input_count
+  && sum (map length pair.insertion.rows) ≟ processed
+
+export
+record RSKPrefix where
+  constructor AdmittedPrefix
+  input_count : Number
+  processed : Number
+  pair : TableauPair
+  path : List (Number, Number)
+  inserted : Integer
+  admitted : So (trace_admitted input_count processed pair)
+
+checked_prefix : Number → Number → TableauPair → List (Number, Number) → Integer → Maybe RSKPrefix
+checked_prefix input_count processed pair path inserted =
+  case choose (trace_admitted input_count processed pair) of
+    Left certificate => Just (AdmittedPrefix input_count processed pair path inserted certificate)
+    Right _ => Nothing
+
+insert_letters : RSKPrefix → List (Integer, Integer) → Maybe RSKPrefix
+insert_letters prefix [] = Just prefix
+insert_letters prefix ((label, value) :: rest) = do
+  next ← insert_letter prefix.pair.insertion value
+  recording ← checked_semistandard (append_at (fst next.new_cell) label prefix.pair.recording.rows)
+  pair ← checked_pair next.filling recording
+  checked ← checked_prefix prefix.input_count (S prefix.processed) pair next.path value
+  insert_letters checked rest
+
+trace_letters : List (Integer, Integer) → Number → Maybe RSKPrefix
+trace_letters letters step = do
+  empty ← checked_semistandard []
+  pair ← checked_pair empty empty
+  prefix ← checked_prefix (length letters) 0 pair [] 0
+  insert_letters prefix (take step letters)
+
+export
+word_prefix : CheckedWord → Number → Maybe RSKPrefix
+word_prefix word step = trace_letters
+  (map (\(label, value) => (cast label, value)) (numbered 1 word.letters)) step
+
+export
+permutation_prefix : CheckedPermutation → Number → Maybe RSKPrefix
+permutation_prefix permutation step = trace_letters
+  (map (\(label, value) => (cast label, value)) (numbered 1 permutation.letters)) step
+
+export
+biword_prefix : CheckedBiword → Number → Maybe RSKPrefix
+biword_prefix biword step = trace_letters biword.letters step
+
+export
+matrix_prefix : CheckedMatrix → Number → Maybe RSKPrefix
+matrix_prefix matrix step = do
+  biword ← matrix_biword matrix
+  biword_prefix biword step
+
+-- A prefix is deliberately not a completed family result.
+export
+record WordPair where
+  constructor AdmittedWordPair
+  insertion : SemistandardFilling
+  recording : StandardFilling
+  same_shape : So (pair_admitted insertion recording.filling)
+
+export
+record PermutationPair where
+  constructor AdmittedPermutationPair
+  insertion : StandardFilling
+  recording : StandardFilling
+  same_shape : So (pair_admitted insertion.filling recording.filling)
+
+export
+record BiwordPair where
+  constructor AdmittedBiwordPair
+  pair : TableauPair
+
+export
+complete_word : RSKPrefix → Maybe WordPair
+complete_word prefix = if not (prefix.processed ≟ prefix.input_count) then Nothing else do
+  recording ← checked_standard prefix.pair.recording.rows
+  case choose (pair_admitted prefix.pair.insertion recording.filling) of
+    Left certificate => Just (AdmittedWordPair prefix.pair.insertion recording certificate)
+    Right _ => Nothing
+
+export
+checked_permutation_pair : List (List Integer) → List (List Integer) → Maybe PermutationPair
+checked_permutation_pair insertion_rows recording_rows = do
+  insertion ← checked_standard insertion_rows
+  recording ← checked_standard recording_rows
+  case choose (pair_admitted insertion.filling recording.filling) of
+    Left certificate => Just (AdmittedPermutationPair insertion recording certificate)
+    Right _ => Nothing
+
+export
+complete_permutation : RSKPrefix → Maybe PermutationPair
+complete_permutation prefix =
+  if prefix.processed ≟ prefix.input_count
+     then checked_permutation_pair prefix.pair.insertion.rows prefix.pair.recording.rows
+     else Nothing
+
+export
+complete_biword : RSKPrefix → Maybe BiwordPair
+complete_biword prefix =
+  if prefix.processed ≟ prefix.input_count then Just (AdmittedBiwordPair prefix.pair) else Nothing
+
+replace_at : Number → value_type → List value_type → List value_type
+replace_at index value [] = []
+replace_at Z value (_ :: rest) = value :: rest
+replace_at (S index) value (first :: rest) = first :: replace_at index value rest
+
+at_index : Number → List value_type → Maybe value_type
+at_index index [] = Nothing
+at_index Z (first :: rest) = Just first
+at_index (S index) (first :: rest) = at_index index rest
+
+reverse_row : Integer → List Integer → Maybe (List Integer, Integer)
+reverse_row value row = case reverse (filter (\(_, entry) => entry < value) (numbered 0 row)) of
+  [] => Nothing
+  (index, bumped) :: _ => Just (replace_at index value row, bumped)
+
+reverse_upper : Integer → List (List Integer) → Maybe (List (List Integer), Integer)
+reverse_upper value [] = Just ([], value)
+reverse_upper value (row :: rest) = do
+  (changed, bumped) ← reverse_row value row
+  (upper, outgoing) ← reverse_upper bumped rest
+  Just (changed :: upper, outgoing)
+
+delete_corner : Number → List (List Integer) → Maybe (List (List Integer), Integer)
+delete_corner Z rows = Nothing
+delete_corner (S index) rows = do
+  row ← at_index index rows
+  removed ← last' row
+  let width = length row
+      lower = drop (S index) rows
+  if maybe False (\next => length next >= width) (head' lower) then Nothing else
+    Just (filter (not . null) (replace_at index (take (minus width 1) row) rows), removed)
+
+inverse_steps : Number → List (List Integer) → List (List Integer) → List Integer → Maybe CheckedPermutation
+inverse_steps Z insertion recording values =
+  if null insertion && null recording then checked_permutation values else Nothing
+inverse_steps (S count) insertion recording values = do
+  (row_index, row) ← find (\(_, row) => last' row ≟ Just (cast (S count))) (numbered 0 recording)
+  (smaller, removed) ← delete_corner (S row_index) insertion
+  (smaller_recording, _) ← delete_corner (S row_index) recording
+  (upper, outgoing) ← reverse_upper removed (reverse (take row_index smaller))
+  let next = reverse upper ++ drop row_index smaller
+  checked ← checked_semistandard next
+  inverse_steps count checked.rows smaller_recording (outgoing :: values)
+
+export
+inverse_permutation : PermutationPair → Maybe CheckedPermutation
+inverse_permutation pair = inverse_steps (sum (map length pair.insertion.filling.rows))
+  pair.insertion.filling.rows pair.recording.filling.rows []
+
+export
+permutation_letters : CheckedPermutation → List Integer
+permutation_letters permutation = permutation.letters
+
+rows_text : List (List Integer) → Text
+rows_text rows = concat (intersperse ";" (map (concat . intersperse "," . map show) rows))
+
+export
+prefix_observation : RSKPrefix → Text
+prefix_observation prefix =
+  "S=" ++ show prefix.processed ++ "|P=" ++ rows_text prefix.pair.insertion.rows
+  ++ "|Q=" ++ rows_text prefix.pair.recording.rows
+  ++ "|PATH=" ++ concat (intersperse ";" (map (\(row, column) => show row ++ "," ++ show column) prefix.path))
+  ++ "|V=" ++ show prefix.inserted

@@ -1,0 +1,6 @@
+module RejectWordInverse
+
+import YoungTableaux.CheckedRSK
+
+wrong_family : WordPair → Maybe CheckedPermutation
+wrong_family pair = inverse_permutation pair

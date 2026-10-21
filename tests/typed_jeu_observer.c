@@ -49,6 +49,16 @@ static void run_case(const char *name, const char *outer, const char *inner,
     puts("UNEXPECTED_NATIVE_NONTERMINATION");
 }
 
+static void run_rectification(const char *name,const char *outer,const char *inner,const char *entries)
+{
+    printf("RECTIFY %s\n",name);
+    JeuState state ← {0};
+    if(jeu_state_parse(outer,inner,entries,&state)!=YT_OK || jeu_rectify(&state)!=YT_OK) {
+        puts("REJECTED"); return;
+    }
+    observe(&state);
+}
+
 int main(void)
 {
     run_case("empty","[]","[]","[]",1,1);
@@ -69,5 +79,11 @@ int main(void)
     run_case("coordinate-outside-board","2","1","3",64,64);
     run_case("entry-upper-bound","2","1","2147483647",1,1);
     run_case("unrepresentable-entry","2","1","2147483648",1,1);
+    run_rectification("empty","[]","[]","[]");
+    run_rectification("straight","2,1","[]","1,2;3");
+    run_rectification("tie","2,1","1","1;1");
+    run_rectification("multiple-slides","3,2","2,1","2;3");
+    run_rectification("empty-skew","3,2,1","3,2,1","[];[];[]");
+    run_rectification("malformed","1,2","[]","1;2,3");
     return 0;
 }

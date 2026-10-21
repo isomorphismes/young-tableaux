@@ -17,6 +17,14 @@ require name passed = if passed then pure () else do
   putStrLn ("ADMISSION_FAILURE " ++ name)
   exitFailure
 
+run_rectification : Text → List Number → List Number → List (Number, Number, Number) → IO ()
+run_rectification name outer inner entries = do
+  putStrLn ("RECTIFY " ++ name)
+  let filling = map (\(row, column, value) => entry_at_cell row column value) entries
+  case rectification_observation outer inner filling of
+    Nothing => putStrLn "REJECTED"
+    Just result => putStrLn result
+
 main : IO ()
 main = do
   require "zero-cell" (isNothing (checked_cell 0 1))
@@ -46,3 +54,12 @@ main = do
   run_case "coordinate-outside-board" [2] [1] [(1,2,3)] 64 64
   run_case "entry-upper-bound" [2] [1] [(1,2,2147483647)] 1 1
   run_case "unrepresentable-entry" [2] [1] [(1,2,2147483648)] 1 1
+  require "duplicate-entry" (isNothing (checked_skew [2] [] [entry_at_cell 1 1 1,entry_at_cell 1 1 2]))
+  require "missing-entry" (isNothing (checked_skew [2] [] [entry_at_cell 1 1 1]))
+  require "outside-entry" (isNothing (checked_skew [1] [] [entry_at_cell 1 2 1]))
+  run_rectification "empty" [] [] []
+  run_rectification "straight" [2,1] [] [(1,1,1),(1,2,2),(2,1,3)]
+  run_rectification "tie" [2,1] [1] [(1,2,1),(2,1,1)]
+  run_rectification "multiple-slides" [3,2] [2,1] [(1,3,2),(2,2,3)]
+  run_rectification "empty-skew" [3,2,1] [3,2,1] []
+  run_rectification "malformed" [1,2] [] [(1,1,1),(2,1,2),(2,2,3)]

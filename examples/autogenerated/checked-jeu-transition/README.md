@@ -46,3 +46,12 @@ over five minutes without producing a compiled module. That attempt is not a
 PASS. The predicate now casts to unbounded Integer for the exact representability
 comparison; it does not narrow/wrap to machine Int. Compiler and executable
 timeouts also prevent this class of stall from masquerading as acceptance.
+
+The 2026-10-21 continuation extends the same checked owner to full rectification.
+`RectifiedFilling` certifies an empty inner shape; the rectifier repeatedly opens
+the last inner row's removable corner and finishes checked slides. Six complete
+results are compared with native rectification, including empty/straight/skew
+boards, multiple slides, ties and malformed input. Duplicate, missing and
+outside entries add three direct admission controls. A separately compiled
+no-op rectification must fail the full-result comparison. This does not change
+native application ownership or imply Android execution of the typed model.

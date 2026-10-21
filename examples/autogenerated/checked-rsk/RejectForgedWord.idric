@@ -1,0 +1,7 @@
+module RejectForgedWord
+
+import YoungTableaux.CheckedRSK
+import Data.So
+
+forged : CheckedWord
+forged = AdmittedWord [0] Oh
