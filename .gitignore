@@ -3,3 +3,5 @@
 /.ick-stages/
 /.ick-packages/
 *.o
+/tests/__pycache__/
+/idric-runtime/

@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   qualified-ick:
@@ -16,11 +17,19 @@ jobs:
         uses: isomorphisms/ai-ci/ick-host@903b2cb27ea572c9c6cb2ffa9f39e0fbf06ec9f8
       - name: Archive the qualified compiler for reproducible host comparisons
         run: tar -C "${{ runner.temp }}" -czf "${{ runner.temp }}/ick-host-stage.tar.gz" ick-host-stage
+      - name: Split the archive into independently retrievable parts
+        run: split -b 400M "${{ runner.temp }}/ick-host-stage.tar.gz" "${{ runner.temp }}/ick-host-stage.part-"
       - name: Preserve the qualified compiler and runtime closure
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: young-qualified-host-${{ github.event.pull_request.head.sha || github.sha }}
-          path: ${{ runner.temp }}/ick-host-stage.tar.gz
+          name: young-qualified-host-aa-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/ick-host-stage.part-aa
+          if-no-files-found: error
+      - name: Preserve the second compiler archive part
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: young-qualified-host-ab-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/ick-host-stage.part-ab
           if-no-files-found: error
 
   observable-jdt:
@@ -53,6 +62,11 @@ jobs:
           --compiler-flag=-fno-link-libatomic
       - name: Show the actual native receipt
         run: cat build/jdt-visual-evidence/receipt.tsv
+      - name: Reject the ten restored audit defects
+        env:
+          ITHON_PYTHON: python3
+          ITHON_CHECK_RECEIPT: ${{ runner.temp }}/repair-source-checks.ndjson
+        run: .ithon/ithon tests/repair_negative_controls.pi --compiler "${{ steps.ick.outputs.compiler }}"
       - name: Preserve positive and negative evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -60,7 +74,9 @@ jobs:
           name: jdt-visual-${{ github.event.pull_request.head.sha || github.sha }}
           path: |
             build/jdt-visual-evidence/
+            build/repair-negative-controls/
             ${{ runner.temp }}/jdt-source-checks.ndjson
+            ${{ runner.temp }}/repair-source-checks.ndjson
           if-no-files-found: warn
 
   typed-jdt:
@@ -73,37 +89,44 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
-      - name: Pin actual Idriç compiler source
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
-        with:
-          repository: isomorphisms/Idric
-          ref: 94dfd99bd3e376507fedc8611053b7173b2519f0
-          path: idric-toolchain
-          persist-credentials: false
-      - name: Qualify explicit ICK for the compiler's native support
+      - name: Qualify explicit ICK for native trace comparison
         id: ick
         uses: isomorphisms/ai-ci/ick-host@903b2cb27ea572c9c6cb2ffa9f39e0fbf06ec9f8
-      - name: Build owned Idriç compiler
+      - name: Exact accepted Idriç compiler bundle
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          repository: isomorphisms/catfood
+          run-id: 38090627721
+          artifact-ids: 11684276190
+          merge-multiple: true
+          github-token: ${{ github.token }}
+          path: idric-runtime
+      - name: Verify compiler bundle identity
+        run: sha256sum -c ci/idric-bundle.sha256
+      - name: Restore exact compiler and Chez runtime
+        run: tar --no-same-owner -xzf idric-runtime/idric-linux-x86_64-94dfd99bd3e376507fedc8611053b7173b2519f0.tar.gz -C idric-runtime
+      - name: Accepted mandatory Ithon frontend
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: dilapidated-shed/ithon
+          ref: 74ab6d6044b07b76a910978437a34a6b5ac6acda
+          path: .ithon
+          persist-credentials: false
+      - name: Execute Idriç transitions and reject compiled semantic mutants
         env:
-          CC: ${{ steps.ick.outputs.compiler }}
-          CFLAGS: -fno-link-libatomic -static-libgcc
-        shell: bash
-        run: |
-          set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y curl python3 util-linux
-          ( cd idric-toolchain/_ && ./edric all )
-          test -x idric-toolchain/_/build/exec/idris2
-      - name: Typecheck and execute signed-neighbor/provenance rules
-        shell: bash
-        run: |
-          set -euo pipefail
-          compiler="$GITHUB_WORKSPACE/idric-toolchain/_/build/exec/idris2"
-          export PATH="$GITHUB_WORKSPACE/idric-toolchain/_/.tools/bin:$PATH"
-          export IDRIS2_PREFIX="$GITHUB_WORKSPACE/idric-toolchain/_/build/env"
-          "$compiler" --source-dir types --check types/YoungTableaux/JeuTrace.idric
-          IDRIS2_PATH="$GITHUB_WORKSPACE/build/ttc" "$compiler" \
-            --source-dir examples/autogenerated/jeu-trace \
-            -o jeu-trace-checks \
-            examples/autogenerated/jeu-trace/JeuTraceChecks.idric
-          build/exec/jeu-trace-checks
+          ITHON_PYTHON: python3
+          ITHON_CHECK_RECEIPT: ${{ runner.temp }}/typed-source-checks.ndjson
+        run: >-
+          .ithon/ithon tests/typed_jeu_contract.pi
+          --compiler "${{ steps.ick.outputs.compiler }}"
+          --idric "$GITHUB_WORKSPACE/idric-runtime/idric-linux-x86_64-94dfd99bd3e376507fedc8611053b7173b2519f0/bin/idric"
+          --idric-env "$GITHUB_WORKSPACE/idric-runtime/idric-linux-x86_64-94dfd99bd3e376507fedc8611053b7173b2519f0/bin/idric-env"
+      - name: Preserve actual compiler and trace evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: typed-jdt-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            build/typed-jeu-evidence/
+            ${{ runner.temp }}/typed-source-checks.ndjson
+          if-no-files-found: error

@@ -46,3 +46,25 @@ jobs:
           import os, pathlib, subprocess, sys
           compiler = pathlib.Path('${{ steps.ick.outputs.compiler }}')
           subprocess.run([sys.executable, 'tests/audit_renderer.py', '--compiler', str(compiler)], check=True)
+      - name: Accepted Ithon frontend for the current operation ledger
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: dilapidated-shed/ithon
+          ref: 74ab6d6044b07b76a910978437a34a6b5ac6acda
+          path: .ithon
+          persist-credentials: false
+      - name: Require and emit all 44 operation verdicts
+        env:
+          ITHON_PYTHON: python3
+          ITHON_CHECK_RECEIPT: ${{ runner.temp }}/ledger-source-checks.ndjson
+        run: .ithon/ithon tests/emit_operation_ledger.pi
+      - name: Preserve the exact-head operation ledger
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: operation-ledger-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            build/current-44-operation-ledger.tsv
+            build/render-audit/receipt.tsv
+            ${{ runner.temp }}/ledger-source-checks.ndjson
+          if-no-files-found: error

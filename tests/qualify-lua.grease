@@ -21,7 +21,7 @@ for path in ([project, pipes, stock, compiler, support, grease, output]) {
 test ! -e "$output"
 mkdir -p "$output"
 var receipt = "$output/consumer.tsv"
-printf 'key\tvalue\nandroid_build\tNOT_RUN\nphysical_device\tNOT_RUN\nwhole_application\tBLOCKED; independent mathematical audit has ten failures\n' > "$receipt"
+printf 'key\tvalue\nandroid_build\tNOT_RUN\nphysical_device\tNOT_RUN\nwhole_application\tNOT_VERIFIED; this gate accepts only the embedded runtime\n' > "$receipt"
 proc blocked (code) {
   printf 'status\tBLOCKED\nblocker\t%s\n' "$code" >> "$receipt"
   echo "BLOCKED $code" >&2

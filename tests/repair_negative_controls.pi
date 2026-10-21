@@ -1,0 +1,113 @@
+"""Restore documented defects in disposable sources and require counterexamples."""
+import argparse
+import shutil
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+from builtins import SystemExit, sorted
+
+ROOT ∈ object ← Path(__file__).resolve().parent.parent
+SOURCES ∈ list[str] ← ["app/ui/controls.c", "app/console/console.c", "app/console/nearby.c",
+    "app/render/raster.c", "app/render/paint.c", "tests/audit_bridge.c"]
+MUTANTS ∈ list[tuple[str,str,str,str,str,str]] ← [
+    ("C1", "app/console/console.c", "if(advanced_run(c,op)) return;", "if(advanced_run(c,op)) return; if(op==FindCorners) { c->output[2][0]=0; return; }", "ui", "FindCorners"),
+    ("C2", "app/console/console.c", "if(advanced_run(c,op)) return;", "if(advanced_run(c,op)) return; if(op==FindAddableCells) { c->output[2][0]=0; return; }", "ui", "FindAddableCells"),
+    ("C3", "app/console/console.c", "if(advanced_run(c,op)) return;", "if(advanced_run(c,op)) return; if(op==FindRemovableCells) { c->output[2][0]=0; return; }", "ui", "FindRemovableCells"),
+    ("C4-C6-C8", "app/console/console.c", " || row>INT_MAX", "", "ui", "cell validation"),
+    ("C7", "app/core/jeu_de_taquin.c", "if(!tableau || partition_validate(&tableau->shape.outer)!=YT_OK\n       || partition_validate(&tableau->shape.inner)!=YT_OK\n       || !partition_contains_partition(&tableau->shape.outer,&tableau->shape.inner))\n        return (SkewValidation){false,false,false,false,false,false};", "if(!tableau) return (SkewValidation){false,false,false,false,false,false};", "bounds", "native skew validation")]
+
+def build(compiler ∈ str, changed ∈ str, mutant ∈ object, library ∈ object) → None:
+    command ∈ list[str] ← [compiler,"-fno-link-libatomic","-std=c17","-O2","-shared","-fPIC"]
+    for include in ["app/core","app/ui","app/console","app/render"]:
+        command.append("-I" + str(ROOT.joinpath(include)))
+    core_paths ∈ list[object] ← sorted(ROOT.joinpath("app/core").glob("*.c"))
+    for core in core_paths:
+        source_name ∈ str ← str(core)
+        changed_name ∈ str ← str(ROOT.joinpath(changed))
+        if source_name == changed_name:
+            command.append(str(mutant))
+        else:
+            command.append(source_name)
+    for source in SOURCES:
+        if source == changed:
+            command.append(str(mutant))
+        else:
+            command.append(str(ROOT.joinpath(source)))
+    command.extend(["-lm","-o",str(library)])
+    subprocess.run(command, check=True)
+
+def main() → None:
+    parser ∈ object ← argparse.ArgumentParser()
+    parser.add_argument("--compiler", required=True)
+    args ∈ object ← parser.parse_args()
+    compiler ∈ str ← args.compiler
+    output ∈ object ← ROOT.joinpath("build/repair-negative-controls")
+    output.mkdir(parents=True, exist_ok=True)
+    summary ∈ list[str] ← ["failures\tresult\n"]
+    for mutation in MUTANTS:
+        name ∈ str ← mutation[0]
+        source ∈ str ← mutation[1]
+        old ∈ str ← mutation[2]
+        new ∈ str ← mutation[3]
+        family ∈ str ← mutation[4]
+        diagnostic ∈ str ← mutation[5]
+        baseline ∈ object ← subprocess.run([sys.executable,str(ROOT.joinpath("tests/independent_audit.py")),
+            "--compiler",compiler,"--family",family,"--receipt",str(output.joinpath(name + "-baseline.tsv"))],
+            text=True,capture_output=True)
+        baseline_code ∈ int ← baseline.returncode
+        if baseline_code != 0:
+            raise SystemExit("FAIL: current implementation failed before mutation: " + name)
+        directory ∈ object ← output.joinpath(name)
+        directory.mkdir(exist_ok=True)
+        text ∈ str ← ROOT.joinpath(source).read_text()
+        occurrences ∈ int ← text.count(old)
+        if occurrences != 1:
+            raise SystemExit("FAIL: mutation not unique: " + name)
+        mutant ∈ object ← directory.joinpath("mutant.c")
+        mutant.write_text(text.replace(old,new))
+        library ∈ object ← directory.joinpath("mutant.so")
+        build(compiler,source,mutant,library)
+        result ∈ object ← subprocess.run([sys.executable,str(ROOT.joinpath("tests/independent_audit.py")),
+            "--library",str(library),"--family",family,"--receipt",str(directory.joinpath("counterexamples.tsv"))],
+            text=True,capture_output=True)
+        directory.joinpath("stdout").write_text(result.stdout)
+        directory.joinpath("stderr").write_text(result.stderr)
+        code ∈ int ← result.returncode
+        counterexamples ∈ str ← directory.joinpath("counterexamples.tsv").read_text()
+        if code != 1 or not ("FAIL\t" in counterexamples) or not (diagnostic in counterexamples):
+            raise SystemExit("FAIL: defect not rejected by independent oracle: " + name)
+        if name == "C4-C6-C8":
+            for operation in ["AddCell","RemoveCell","ReverseInsert","JeuDeTaquinSlide"]:
+                if not (operation in counterexamples):
+                    raise SystemExit("FAIL: coordinate mutation escaped " + operation)
+        summary.append(name + "\tREJECTED\n")
+    subprocess.run([sys.executable,str(ROOT.joinpath("tests/audit_renderer.py")),"--compiler",compiler],check=True)
+    with tempfile.TemporaryDirectory(prefix="young-render-mutant-") as scratch:
+        temporary ∈ object ← Path(scratch)
+        shutil.copytree(ROOT.joinpath("app"),temporary.joinpath("app"))
+        paint ∈ object ← temporary.joinpath("app/render/paint.c")
+        text = paint.read_text()
+        old = "int64_t minimum=projection->values[0],maximum=projection->values[0];"
+        new = "int minimum=projection->values[0],maximum=projection->values[0];"
+        occurrences = text.count(old)
+        if occurrences != 1:
+            raise SystemExit("FAIL: renderer mutation not unique")
+        paint.write_text(text.replace(old,new))
+        result = subprocess.run([sys.executable,str(ROOT.joinpath("tests/audit_renderer.py")),
+            "--compiler",compiler,"--source",str(temporary)],text=True,capture_output=True)
+        output.joinpath("renderer.stdout").write_text(result.stdout)
+        output.joinpath("renderer.stderr").write_text(result.stderr)
+        renderer_receipt ∈ str ← temporary.joinpath("build/render-audit/receipt.tsv").read_text()
+        output.joinpath("renderer.tsv").write_text(renderer_receipt)
+        code = result.returncode
+        observed ∈ str ← result.stdout
+        if code != 1 or not ("word 1 PASS 0" in observed) or not ("biword 1;1 PASS 0" in observed):
+            raise SystemExit("FAIL: renderer mutation failed outside the overflow witness")
+        if not ("word 2147483647 FAIL" in observed) or not ("biword 1;2147483647 FAIL" in observed):
+            raise SystemExit("FAIL: C9/C10 deliberate overflow escaped")
+    summary.extend(["C9\tREJECTED\n","C10\tREJECTED\n"])
+    output.joinpath("receipt.tsv").write_text("".join(summary))
+    print("C1-C10 PASS: current implementations pass; all restored defects rejected")
+
+main()

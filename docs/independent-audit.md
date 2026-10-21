@@ -225,3 +225,13 @@ Remaining unverified boundaries: external Idriç/Idris type checking, physical
 UI/rendering, all malformed native-memory states, exhaustive overflow behavior,
 all arbitrary rational finite sums, and the RNG distribution over every seed.
 These are explicit limits on PASS scope, not silently upgraded evidence.
+# Historical audit; current qualification
+
+The counterexamples below describe the original audited revisions. Native
+commit 4436601f57d22b27c6f524c4174abe55c247bf91 repaired C1–C10. Current-head
+qualification reruns the original independent oracle, all 44 registered dispatch
+operations and overflow-trapping renderer probes. The checked Ithon repair
+controls restore the incorrect implementations and require rejecting results.
+Exact-head CI publishes `current-44-operation-ledger.tsv`; hidden controls retain
+their observed visibility and are not classified as defects.
+

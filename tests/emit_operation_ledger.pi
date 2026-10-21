@@ -1,0 +1,51 @@
+"""Require complete independent audit evidence before emitting 44 verdicts."""
+import ast
+import re
+import subprocess
+from pathlib import Path
+from builtins import SystemExit
+
+ROOT ∈ object ← Path(__file__).resolve().parent.parent
+
+def main() → None:
+    audit ∈ str ← ROOT.joinpath("build/independent-audit.tsv").read_text()
+    count ∈ int ← 0
+    audit_lines ∈ list[str] ← audit.splitlines()
+    for line in audit_lines:
+        if line.startswith("FAIL\t") or line.startswith("FAIL_COUNT\t"):
+            raise SystemExit("FAIL: mathematical counterexample present")
+        if line.startswith("CHECKS\t"):
+            fields ∈ list[str] ← line.split("\t")
+            count = count + int(fields[2])
+    if count != 171228:
+        raise SystemExit("FAIL: incomplete or changed audit corpus: " + str(count))
+    renderer ∈ list[str] ← ROOT.joinpath("build/render-audit/receipt.tsv").read_text().splitlines()
+    if len(renderer) != 5:
+        raise SystemExit("FAIL: incomplete renderer receipt")
+    for line in renderer[1:]:
+        if not line.endswith("\tPASS"):
+            raise SystemExit("FAIL: renderer not accepted")
+    registry ∈ str ← ROOT.joinpath("app/console/operations.def").read_text()
+    names ∈ list[str] ← re.findall(r"^OP\((\w+)", registry, re.M)
+    dispatch ∈ list[str] ← ROOT.joinpath("build/public-dispatch.tsv").read_text().splitlines()
+    if len(names) != 44 or len(dispatch) != 45:
+        raise SystemExit("FAIL: operation coverage is not 44")
+    result ∈ object ← subprocess.run(["git","-C",str(ROOT),"rev-parse","HEAD"],
+                                    check=True,text=True,capture_output=True)
+    revision ∈ str ← result.stdout.strip()
+    seen ∈ list[str] ← []
+    rows ∈ list[str] ← ["operation\tverdict\tsource_revision\tmathematical_checks\tbutton_visible\toutput_rendered\tpublic_output\n"]
+    for line in dispatch[1:]:
+        fields = line.split("\t")
+        name ∈ str ← fields[0]
+        actual ∈ str ← ast.literal_eval(fields[2])
+        expected ∈ str ← ast.literal_eval(fields[3])
+        if not (name in names) or name in seen or not (expected in actual):
+            raise SystemExit("FAIL: dispatch mismatch or duplicate: " + name)
+        seen.append(name)
+        rows.append(name + "\tPASS\t" + revision + "\t" + str(count) + "\t"
+                    + fields[4] + "\t" + fields[5] + "\t" + fields[2] + "\n")
+    ROOT.joinpath("build/current-44-operation-ledger.tsv").write_text("".join(rows))
+    print("OPERATIONS PASS: all 44 registered operations, including intentionally hidden controls")
+
+main()
