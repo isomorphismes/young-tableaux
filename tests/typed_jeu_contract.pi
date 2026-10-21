@@ -16,7 +16,7 @@ def compile_and_run(idric ∈ str, environment ∈ str, directory ∈ object,
     shutil.copyfile(ROOT.joinpath(driver_source), driver)
     driver_name ∈ str ← driver.name
     result ∈ object ← subprocess.run([idric, "-o", "transition-checks", driver_name],
-                                    cwd=directory, text=True, capture_output=True)
+                                    cwd=directory, text=True, capture_output=True, timeout=120)
     directory.joinpath("compile.stdout").write_text(result.stdout)
     directory.joinpath("compile.stderr").write_text(result.stderr)
     executable ∈ object ← directory.joinpath("build/exec/transition-checks")
@@ -27,7 +27,7 @@ def compile_and_run(idric ∈ str, environment ∈ str, directory ∈ object,
     if code != 0 or not exists or "Error:" in stdout or "Error:" in stderr:
         raise SystemExit("FAIL: actual Idriç compilation; see " + str(directory))
     result = subprocess.run([environment, str(executable)], cwd=directory,
-                            text=True, capture_output=True)
+                            text=True, capture_output=True, timeout=30)
     directory.joinpath("execution.stdout").write_text(result.stdout)
     directory.joinpath("execution.stderr").write_text(result.stderr)
     return result
@@ -67,8 +67,8 @@ def main() → None:
     for core in core_paths:
         command.append(str(core))
     command.extend(["-lm", "-o", str(native)])
-    subprocess.run(command, check=True)
-    result = subprocess.run([str(native)], text=True, capture_output=True)
+    subprocess.run(command, check=True, timeout=120)
+    result = subprocess.run([str(native)], text=True, capture_output=True, timeout=30)
     output.joinpath("native.stdout").write_text(result.stdout)
     output.joinpath("native.stderr").write_text(result.stderr)
     code = result.returncode
@@ -82,7 +82,7 @@ def main() → None:
         ("tie-right", "if right_value < below_value", "if right_value <= below_value", "CASE equal-chooses-below"),
         ("cell-overflow", "value > 0 && value <= 64", "value > 0", "ADMISSION_FAILURE oversized-row"),
         ("ascending-partition", "next <= previous", "next <= 64", "ADMISSION_FAILURE ascending-shape"),
-        ("entry-overflow", "entry.value > 0 && entry.value <= 2147483647", "entry.value > 0", "ADMISSION_FAILURE oversized-entry")]
+        ("entry-overflow", "entry.value > 0 && (the Integer (cast entry.value)) <= 2147483647", "entry.value > 0", "ADMISSION_FAILURE oversized-entry")]
     for mutation in mutations:
         name ∈ str ← mutation[0]
         old ∈ str ← mutation[1]

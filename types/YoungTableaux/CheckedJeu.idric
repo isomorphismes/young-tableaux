@@ -87,7 +87,7 @@ same_cell row column (other_row, other_column) = row ≟ other_row && column ≟
 entry_admitted : List Number → List Number → Maybe (Number, Number) → EntryAtCell → Bool
 entry_admitted outer inner hole entry =
   inside outer entry.row entry.column && not (inside inner entry.row entry.column)
-  && entry.value > 0 && entry.value <= 2147483647
+  && entry.value > 0 && (the Integer (cast entry.value)) <= 2147483647
   && not (maybe False (same_cell entry.row entry.column) hole)
 
 ordered_entry : List EntryAtCell → EntryAtCell → Bool

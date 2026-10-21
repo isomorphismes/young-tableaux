@@ -39,3 +39,10 @@ unbounded positive Number entries, while native entries use signed 32-bit int.
 The native-compatible slice now checks that ceiling and compares both the
 largest representable entry and its first unrepresentable successor. A compiled
 model with that check removed must fail the direct admission oracle.
+
+The first large-ceiling predicate compared Number directly with 2147483647
+inside the proof-bearing filling condition. Actual compiler execution consumed
+over five minutes without producing a compiled module. That attempt is not a
+PASS. The predicate now casts to unbounded Integer for the exact representability
+comparison; it does not narrow/wrap to machine Int. Compiler and executable
+timeouts also prevent this class of stall from masquerading as acceptance.
