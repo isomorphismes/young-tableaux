@@ -1,10 +1,11 @@
 #include "paint.h"
+#include "../presentation/charcoal.h"
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
 #include <inttypes.h>
-#define BG 0xff211b17U
-#define FG 0xffeeeae3U
+#define BG CHARCOAL_BACKGROUND
+#define FG CHARCOAL_TEXT
 #define BLUE 0xffc7ac76U
 #define WEGERT_TAU 6.28318530717958647692f
 #define WEGERT_LOG_10 2.30258509299404568402f
@@ -135,7 +136,8 @@ static void paint_wegert(Canvas *b,Rect r,const WegertProjection *projection)
             if(wegert_phase_log(projection,real,imag,&phase,&log_modulus))
                 color=wegert_color((float)remainder(phase,6.28318530717958647692),
                                    (float)remainder(log_modulus,2.30258509299404568402));
-            else if(real==0.0 && imag==0.0 && projection->n_lambda) color=FG;
+            /* Preserve the scientific singularity marker's original RGB. */
+            else if(real==0.0 && imag==0.0 && projection->n_lambda) color=0xffeeeae3U;
             int width=px+sample<=r.w?sample:r.w-px;
             int height=py+sample<=r.h?sample:r.h-py;
             raster_rect(b,r.x+px,r.y+py,width,height,color);
@@ -154,15 +156,15 @@ static void paint_rsk_plot(Canvas *b,Rect r,const RSKPlotProjection *projection,
     int left=r.x+10*scale,right=r.x+r.w-6*scale;
     int top=r.y+5*scale,bottom=r.y+r.h-12*scale;
     if(right<=left || bottom<=top) return;
-    raster_rect(b,left,bottom,right-left+1,scale,0xff584330U);
-    raster_rect(b,left,top,scale,bottom-top+1,0xff584330U);
+    raster_rect(b,left,bottom,right-left+1,scale,CHARCOAL_BORDER);
+    raster_rect(b,left,top,scale,bottom-top+1,CHARCOAL_BORDER);
     int width=right-left,height=bottom-top;
     int point=scale>1?3*scale:3;
     for(int i=0;i<projection->count;++i) {
         int x=projection->count==1?left+width÷2:left+i*width÷(projection->count-1);
         int64_t numerator=((int64_t)projection->values[i]-minimum)*height;
         int y=bottom-(int)(numerator÷(maximum-minimum));
-        uint32_t color=0xff584330U;
+        uint32_t color=CHARCOAL_BORDER;
         if(i+1<projection->step) color=BLUE;
         else if(i+1==projection->step) color=FG;
         raster_rect(b,x-point÷2,y-point÷2,point,point,color);
@@ -184,11 +186,11 @@ void paint_controls(Canvas *b,const Controls *u,bool reverse)
     for(int i=0;i<u->count;++i) {
         const Control *c=&u->controls[i]; Rect r=c->rect; r.y-=u->scroll;
         if(r.y+r.h<=0 || r.y>=u->height) continue;
-        if(c->kind==SEPARATOR) { raster_rect(b,r.x,r.y,r.w,r.h,BLUE); continue; }
+        if(c->kind==SEPARATOR) { raster_rect(b,r.x,r.y,r.w,r.h,CHARCOAL_BORDER); continue; }
         if(c->kind==FIELD || c->kind==BUTTON || c->kind==CHOICE || c->kind==DISABLED_BUTTON) {
-            uint32_t color=c->kind==FIELD?0xff3b332bU:0xff584330U;
-            if(c->kind==DISABLED_BUTTON) color=0xff2c2824U;
-            else if(u->pressed==c->id || u->focus==c->id) color=0xff775d3eU;
+            uint32_t color=c->kind==FIELD?CHARCOAL_SURFACE:CHARCOAL_INTERACTIVE;
+            if(c->kind==DISABLED_BUTTON) color=CHARCOAL_SURFACE;
+            else if(u->pressed==c->id || u->focus==c->id) color=CHARCOAL_SELECTION;
             raster_rect(b,r.x,r.y,r.w,r.h,color);
         }
         if(c->kind==HERO) {
@@ -202,7 +204,7 @@ void paint_controls(Canvas *b,const Controls *u,bool reverse)
             int size=scale, length=(int)strlen(c->text);
             while(size>1 && length*6*size>r.w-4*scale) --size;
             raster_text(b,c->text,r.x+(r.w-raster_text_width(c->text,size))÷2,
-                        r.y+(r.h-7*size)÷2,size,c->kind==DISABLED_BUTTON?0xff80786dU:FG);
+                        r.y+(r.h-7*size)÷2,size,c->kind==DISABLED_BUTTON?CHARCOAL_DISABLED:FG);
             continue;
         }
         if(c->kind==ROW_BLOCKS) {
@@ -238,24 +240,24 @@ void paint_controls(Canvas *b,const Controls *u,bool reverse)
             paint_rsk_plot(b,r,(const RSKPlotProjection *)c->projection,scale);
         } else {
             int columns=(r.w-8*scale)÷(6*scale); if(columns<1) columns=1;
-            wrapped(b,c->text,r.x+4*scale,r.y+4*scale,scale,columns,c->kind==OUTPUT?BLUE:FG);
+            wrapped(b,c->text,r.x+4*scale,r.y+4*scale,scale,columns,FG);
         }
     }
     if(u->content>u->height) {
         int track=u->height, thumb=track*u->height÷u->content; if(thumb<8*scale) thumb=8*scale;
         int top=(track-thumb)*u->scroll÷(u->content-u->height);
-        raster_rect(b,b->width-2*scale,top,2*scale,thumb,BLUE);
+        raster_rect(b,b->width-2*scale,top,2*scale,thumb,CHARCOAL_SECONDARY);
     }
     b->clip_bottom=b->height;
 }
 void paint_keyboard(Canvas *b,const Controls *u,const char *const *labels,int pressed)
 {
     int scale=u->scale,top=b->height-90*u->scale;
-    raster_rect(b,0,top,b->width,90*scale,0xff352b24U);
+    raster_rect(b,0,top,b->width,90*scale,CHARCOAL_SURFACE);
     for(int k=0;k<20;++k) {
         int left=(k%5)*b->width÷5,right=(k%5+1)*b->width÷5;
         int y=top+5*scale+(k÷5)*20*scale;
-        raster_rect(b,left+scale,y,right-left-2*scale,18*scale,k==pressed?0xff775d3eU:0xff584330U);
+        raster_rect(b,left+scale,y,right-left-2*scale,18*scale,k==pressed?CHARCOAL_SELECTION:CHARCOAL_INTERACTIVE);
         int text_scale=scale,fit=(right-left-2*scale)÷(int)(6*strlen(labels[k]));
         if(text_scale>fit) text_scale=fit;
         if(text_scale<1) text_scale=1;
