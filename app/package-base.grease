@@ -1,0 +1,18 @@
+#!/usr/bin/env grease
+# PROJECT SDK BUILD_TOOLS EXISTING_OUTPUT; version/SDK policy stays app-owned.
+set -eu -o pipefail
+if (len(ARGV) !== 4) { echo 'requires PROJECT SDK BUILD_TOOLS OUTPUT' >&2; exit 2 }
+var root = ARGV[0]
+var sdk = ARGV[1]
+var tools = ARGV[2]
+var output = ARGV[3]
+for path in "$root" "$sdk" "$tools" "$output" {
+  if (path[0] !== '/') { echo 'absolute package paths required' >&2; exit 2 }
+}
+test -d "$output"
+test ! -e "$output/unsigned.apk"
+"$tools/aapt2" compile --dir "$root/app/res" -o "$output/charcoal-resources.zip"
+"$tools/aapt2" link -I "$sdk/platforms/android-34/android.jar" \
+  -A "$root/app/assets" --manifest "$root/app/AndroidManifest.xml" \
+  --min-sdk-version 26 --target-sdk-version 34 --version-code 9 \
+  --version-name 0.4.0 -o "$output/unsigned.apk" "$output/charcoal-resources.zip"

@@ -2,7 +2,6 @@ name: Jeu de taquin pixel and typed provenance contract
 
 on:
   pull_request:
-    branches: [tables]
   workflow_dispatch:
 
 permissions:
